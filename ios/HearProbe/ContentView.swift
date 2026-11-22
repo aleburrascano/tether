@@ -317,7 +317,7 @@ struct Tour: View {
 
     private static let steps: [(mark: String, title: String, text: String)] = [
         ("voices", "Voices show up here", "Red is still learning. Grey is ready, tap it. Green is who you hear."),
-        ("brain", "This lights up", "The more sound reaches you, the brighter it gets. It is a picture, not a brain scan."),
+        ("brain", "Your brain on sound", "The more sound reaches you, the harder your brain works."),
         ("bars", "The room's sound", "Big bars mean a loud room."),
         ("bars", "I'll tell you", "If someone calls you, I ask if you want to hear them."),
     ]
