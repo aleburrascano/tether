@@ -99,6 +99,9 @@ final class Extractor {
     private var centroid: [Float]? = nil, interfCentroid: [Float]? = nil
     private var pending: [Float] = []              // samples waiting for the interrupter estimate
     private var denoising = false                  // decided when a filtered stream starts
+    private var ambient = false                    // nobody selected: the noise remover runs on the whole room
+    private var lp: Float = 0                      // brighten: low-pass state
+    private(set) var skips = 0                     // times the filter fell behind and jumped to now
     private var levelEnv: Float = 0                // auto-level: running speech level of what we play
     private(set) var autoGainDB: Float = 0
     private var sessionFile: AVAudioFile?
@@ -131,6 +134,7 @@ final class Extractor {
     func start() {
         histW = 0; read48 = 0; down.reset(); upR.reset()
         slot = nil; active = false; soloSec = 0; refreshes = 0; quality = -1; clipScore = 0
+        ambient = false; skips = 0; lp = 0
         subtracting = nil; subtractSuspended = false; pending = []; loadHist = []; centroid = nil; interfCentroid = nil
         handoff.withLock { newClip = nil; newInterf = nil }
         autoGainDB = 0; levelEnv = 0
@@ -158,6 +162,18 @@ final class Extractor {
         while running {
             let avail = audio.wIdx - read48
             if avail < block { Thread.sleep(forTimeInterval: 0.005); control(); continue }
+            // Fell more than 0.8 s behind (phone too busy): never play old sound. Jump to now and start the
+            // filtered stream again; the skipped stretch stays silent in the history so frame numbers still line up.
+            if avail > Int(audio.sampleRate * 0.8) {
+                let skip = (avail - block) / (3 * 1280) * (3 * 1280)
+                for i in 0..<(skip / 3) { hist[(histW + i) & (histSize - 1)] = 0; outHist[(histW + i) & (histSize - 1)] = 0 }
+                histW += skip / 3; read48 += skip; down.reset(); skips += 1
+                log("filter_skip", ["skipped_sec": Double(skip) / audio.sampleRate, "load": (load * 100).rounded() / 100])
+                loadHist = []; ambient = false
+                if slot != nil { slot = nil }                    // control() sees a fresh selection and restarts cleanly
+                else { audio.endClean() }
+                continue
+            }
             let n = avail / block * block
             let x = audio.read(from: read48, to: read48 + n); read48 += n
             let y = down.down(x)
@@ -189,15 +205,37 @@ final class Extractor {
                     tse.push(fp.baseAddress!, count: Int32(feed.count), out: op.baseAddress!, capacity: Int32(op.count)) } })
                 var clean = Array(out[0..<k])
                 if denoising, let d = Denoiser.shared.process(clean) { clean = d }
+                if Tuning.brighten { clean = brighten(clean) }
                 if Tuning.autoLevel { clean = autoLevel(clean) }
                 for (i, v) in clean.enumerated() { outHist[(streamStart16 + produced16 + i) & (histSize - 1)] = v }
                 produced16 += clean.count
                 audio.writeClean(upR.up(clean))
                 ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
                 trackLoad(ms / (Double(y.count) / 16.0))
+            } else if slot == nil && wantedSlot == nil && Tuning.denoise && Denoiser.shared.ready && !y.isEmpty {
+                // Nobody selected: everyone is heard, with background noise and echo removed.
+                if !ambient {
+                    ambient = true
+                    Denoiser.shared.restart(); upR.reset()
+                    audio.beginClean(at: 3 * base)
+                }
+                let t0 = CFAbsoluteTimeGetCurrent()
+                if let d = Denoiser.shared.process(y) { audio.writeClean(upR.up(d)) }
+                ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+                trackLoad(ms / (Double(y.count) / 16.0))
+            } else if ambient {
+                ambient = false
+                if !active { audio.endClean() }
             }
             control()
         }
+    }
+
+    /// Brighten: +5 dB shelf above ~2 kHz (the filter and the noise remover both dull the voice).
+    private func brighten(_ x: [Float]) -> [Float] {
+        var out = x
+        for i in 0..<x.count { lp = 0.456 * lp + 0.544 * x[i]; out[i] = x[i] + 0.8 * (x[i] - lp) }
+        return out
     }
 
     /// Auto-level: bring the person you're hearing to about -24 dBFS (before your boost slider), at most +15 dB up or
@@ -234,6 +272,7 @@ final class Extractor {
             slot = want; active = false; soloSec = 0; lastClipFrames = []; lastTry = 0; quality = -1; centroid = nil
             subtracting = nil; interfCentroid = nil; pending = []
             handoff.withLock { newClip = nil; newInterf = nil }
+            ambient = false
             audio.endClean(); voices.setExtraction(false)
         }
         guard let s = slot, let tse else { return }
@@ -280,7 +319,7 @@ final class Extractor {
         } else if Tuning.subtract && !subtractSuspended && now - lastInterf >= 3 {
             lastInterf = now
             runSide { self.pickInterrupter(target: s) }
-        } else if now - lastQuality >= 1.5 && Voiceprint.shared.ready {
+        } else if now - lastQuality >= 3 && Voiceprint.shared.ready {
             lastQuality = now
             let end = produced16 + streamStart16
             runSide { self.measureQuality(end: end) }

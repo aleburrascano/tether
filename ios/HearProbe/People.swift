@@ -141,6 +141,10 @@ final class People {
     private func unexplained(slot s: Int, _ e: [Float], _ best: Float, _ newest: Int, slotHasPerson: Bool) -> Int? {
         guard persons.count < maxPeople else { return nil }
         if !slotHasPerson && best < tMatch { return born([e], slot: s, why: "new slot, matches nobody") }
+        // In echoey rooms the same person scores 0.4-0.45 against their own print, which looked like
+        // "someone else on this slot" and made phantom voices (session 2026-11-22 07:02). Until that is
+        // calibrated on real rooms, a slot that has a person keeps that person.
+        if slotHasPerson { return nil }
         if let c = cand, c.slot != s || newest - c.newest > 40 || Voiceprint.cos(Voiceprint.mean(c.embs) ?? e, e) < 0.40 { cand = nil }
         if cand == nil { cand = ([], [], Int.min / 2, s) }
         if newest - cand!.newest >= 12 { cand!.embs.append(e); cand!.scores.append(best); cand!.newest = newest }

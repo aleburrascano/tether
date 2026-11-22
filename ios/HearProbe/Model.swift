@@ -68,6 +68,9 @@ final class Model: ObservableObject {
     @Published var personCheck = Tuning.personCheck
     @Published var personText = ""
     private var selectedSlot: Int? = nil
+    private var routeTick = 0
+    @Published var brighten = Tuning.brighten
+    func setBrighten(_ on: Bool) { brighten = on; Tuning.brighten = on; event("setting", ["brighten": on]) }
     func setPersonCheck(_ on: Bool) { personCheck = on; Tuning.personCheck = on; event("setting", ["person_check": on]) }
     /// The voiceprint layer decides who is on screen (needs its model loaded).
     private var byPerson: Bool { personCheck && Voiceprint.shared.ready }
@@ -156,7 +159,7 @@ final class Model: ObservableObject {
             openLog()
             event("start", ["route": route, "delay": delay, "model": Tuning.modelName, "smoothing": Tuning.smoothing,
                             "person_check": Tuning.personCheck, "clip_check": Tuning.clipCheck, "subtract": Tuning.subtract, "voiceprint": Voiceprint.shared.status,
-                            "denoise": Tuning.denoise, "denoiser": Denoiser.shared.status, "auto_level": Tuning.autoLevel,
+                            "denoise": Tuning.denoise, "brighten": Tuning.brighten, "denoiser": Denoiser.shared.status, "auto_level": Tuning.autoLevel,
                             "session_file": extractor.sessionName])
             audio.onRecordingDone = { [weak self] url in
                 Task { @MainActor in
@@ -182,10 +185,7 @@ final class Model: ObservableObject {
         selected = (selected == b.id) ? nil : b.id
         selectedSlot = selected == nil ? nil : b.slot
         voices.blocked = false
-        if let p = selected, byPerson {
-            let people = self.people
-            extractor.framesFilter = { people.framesOf(person: p, among: $0) }
-        } else { extractor.framesFilter = nil }
+        extractor.framesFilter = nil
         voices.select(selectedSlot)
         extractor.wantedSlot = selectedSlot
         event("select", ["slot": selectedSlot ?? -1, "person": byPerson ? (selected ?? -1) : -1])
@@ -217,9 +217,6 @@ final class Model: ObservableObject {
                     selectedSlot = me.slot; voices.select(me.slot); extractor.wantedSlot = me.slot
                     event("select_follow", ["slot": me.slot, "person": sel])
                 }
-                // someone else is on our person's slot right now: do not let them through
-                let now = people.current(slot: me.slot)
-                voices.blocked = now != nil && now != sel
             }
             personText = people.text
             for e in people.drainEvents() { write(e.merging(["t": (Date().timeIntervalSince(t0) * 1000).rounded() / 1000]) { a, _ in a }) }
@@ -230,7 +227,8 @@ final class Model: ObservableObject {
         }
         bubbles = b
         latest = s.latest; latestFinal = s.latestIsFinal; recent = s.recent
-        audio.refreshRoute()                                  // ask every time: a missed system notice must not leave the sound off
+        routeTick += 1
+        if routeTick % 10 == 0 { audio.refreshRoute() }       // ask every second: a missed system notice must not leave the sound off
         if speakerWarning != audio.outputIsSpeaker {          // headphones connected / removed mid-session
             speakerWarning = audio.outputIsSpeaker
             audio.listen = listening && !speakerWarning
@@ -288,7 +286,7 @@ final class Model: ObservableObject {
                "gain": r(Double(gainNow)), "listen": listening, "delay": delay, "boost": boost, "out_peak": r(Double(audio.outPeak)), "threshold": threshold,
                "buffered": r(buffered), "underruns": underruns, "level_db": r(Double(level)),
                "filter_on": filterOn, "filter_active": filterActive, "solo_sec": r(soloSec), "filter_ms": r(filterMs),
-               "filter_coverage": r(filterCoverage), "filter_load": r(filterLoad), "auto_gain_db": r(autoGainDB), "denoise_ms": r(Denoiser.shared.lastMs), "subtracting": subtracting ?? -1, "filter_refreshes": filterRefreshes,
+               "filter_skips": extractor.skips, "filter_coverage": r(filterCoverage), "filter_load": r(filterLoad), "auto_gain_db": r(autoGainDB), "denoise_ms": r(Denoiser.shared.lastMs), "subtracting": subtracting ?? -1, "filter_refreshes": filterRefreshes,
                "proc_ms": r(procMs), "model_lag": r(modelLag), "errors": voices.errors])
     }
 

@@ -140,26 +140,23 @@ struct Press: ButtonStyle {
     }
 }
 
-/// The room's level over the last few seconds, newest on the right.
+/// The room's level over the last few seconds, newest on the right. One drawing pass (cheap: the audio
+/// models need the processor more than this does).
 struct Levels: View {
     let history: [Float]
     let tone: Color
     var body: some View {
-        GeometryReader { g in
+        Canvas { ctx, size in
             let n = history.count
-            let step = g.size.width / CGFloat(max(1, n))
-            let tall = min(g.size.height, 190)
-            ZStack(alignment: .topLeading) {
-                ForEach(0..<n, id: \.self) { i in
-                    let h = max(3, tall * CGFloat(min(1, history[i])))
-                    Capsule()
-                        .fill(i > n - 4 ? tone : Look.text2)
-                        .frame(width: max(2, step - 4), height: h)
-                        .opacity(0.1 + 0.8 * Double(i) / Double(max(1, n - 1)))
-                        .position(x: CGFloat(i) * step + step / 2, y: g.size.height / 2)
-                }
+            let step = size.width / CGFloat(max(1, n))
+            let tall = min(size.height, 190)
+            for i in 0..<n {
+                let h = max(3, tall * CGFloat(min(1, history[i])))
+                let w = max(2, step - 4)
+                let r = CGRect(x: CGFloat(i) * step + (step - w) / 2, y: (size.height - h) / 2, width: w, height: h)
+                let a = 0.1 + 0.8 * Double(i) / Double(max(1, n - 1))
+                ctx.fill(Path(roundedRect: r, cornerRadius: w / 2), with: .color((i > n - 4 ? tone : Look.text2).opacity(a)))
             }
-            .animation(.linear(duration: 0.1), value: history)
         }
     }
 }
@@ -221,9 +218,10 @@ struct SettingsSheet: View {
                     }
                     Toggle("Remove background noise and echo", isOn: Binding(get: { m.denoise }, set: { m.setDenoise($0) }))
                     Toggle("Even out loudness per person", isOn: Binding(get: { m.autoLevel }, set: { m.setAutoLevel($0) }))
+                    Toggle("Brighten the selected voice", isOn: Binding(get: { m.brighten }, set: { m.setBrighten($0) }))
                 }
                 Section {
-                    Toggle("Tell similar voices apart", isOn: Binding(get: { m.personCheck }, set: { m.setPersonCheck($0) }))
+                    Toggle("Voiceprint check on voices (experimental)", isOn: Binding(get: { m.personCheck }, set: { m.setPersonCheck($0) }))
                     Toggle("Smoothed mute", isOn: Binding(get: { m.smoothing }, set: { m.setSmoothing($0) }))
                     Toggle("Voiceprint-checked clip", isOn: Binding(get: { m.clipCheck }, set: { m.setClipCheck($0) }))
                     Toggle("Subtract the interrupter", isOn: Binding(get: { m.subtract }, set: { m.setSubtract($0) }))
