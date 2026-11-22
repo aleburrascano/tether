@@ -27,7 +27,7 @@ struct ContentView: View {
                 Spacer().frame(height: 14)
                 Text(title)
                     .font(.system(size: 31, weight: .light)).tracking(-0.6)
-                    .foregroundStyle(Look.text).lineLimit(1).minimumScaleFactor(0.7)
+                    .foregroundStyle(m.running && m.speakerWarning ? Color.orange : Look.text).lineLimit(1).minimumScaleFactor(0.7)
                     .id(title).transition(.opacity.combined(with: .offset(y: 8)))
                 Text(subtitle)
                     .font(.system(size: 14)).foregroundStyle(Look.text2)
@@ -53,7 +53,7 @@ struct ContentView: View {
         }
     }
 
-    private var tone: Color { !m.running ? Look.text3 : (m.bubbles.contains { $0.talking } ? Look.accent : Look.text2) }
+    private var tone: Color { !m.running ? Look.text3 : m.speakerWarning ? Color.orange : (m.bubbles.contains { $0.talking } ? Look.accent : Look.text2) }
 
     private var topBar: some View {
         HStack(spacing: 8) {
@@ -79,6 +79,7 @@ struct ContentView: View {
     private var title: String {
         if !m.modelReady { return "Getting ready" }
         if !m.running { return "Not listening" }
+        if m.speakerWarning { return "Connect headphones" }
         if let s = m.selected { return m.filterActive ? "Only voice \(s + 1)" : "Learning voice \(s + 1)" }
         return m.bubbles.isEmpty ? "Listening" : "Hearing everyone"
     }
@@ -87,7 +88,7 @@ struct ContentView: View {
         if !m.error.isEmpty { return m.error }
         if !m.modelReady { return m.modelStatus }
         if !m.running { return "Put the phone on the table and press play." }
-        if m.speakerWarning { return "Sound is off without headphones, because the speaker would feed back. Connect them and it turns on." }
+        if m.speakerWarning { return "Nothing is being played. Without headphones the phone would feed back into its own microphone." }
         if m.selected != nil { return m.filterActive ? "Everyone else is turned down. Tap the number again to hear all voices." : "Keep them talking for a couple of seconds." }
         return m.bubbles.isEmpty ? "A voice appears after someone talks for a moment." : "Tap a voice to hear only that person."
     }
