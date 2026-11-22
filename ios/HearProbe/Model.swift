@@ -145,8 +145,8 @@ final class Model: ObservableObject {
             try audio.start()
             route = audio.routeText
             speakerWarning = audio.outputIsSpeaker
-            applyListen()
             selected = nil; selectedSlot = nil; bubbles = []; nextMetricFrame = 0
+            applyListen()
             voices.blocked = false
             voices.select(nil)
             voices.threshold = Float(threshold)
