@@ -81,6 +81,11 @@ final class Extractor {
     /// Narrows a slot's solo frames to the selected person's (set while the voiceprint layer is on).
     var framesFilter: (([(Int, Float)]) -> [(Int, Float)])? = nil
     private var slot: Int? = nil
+    /// A SECOND person to hear as well (picked after the first). The second filter, normally used to subtract an
+    /// interrupter, extracts this person instead and its output is ADDED to the first. Subtraction is off meanwhile.
+    var extraSlot: Int? = nil
+    private(set) var adding: Int? = nil            // the second person whose filtered voice is being added
+    private var extraTail: [Float] = []            // second filter's output not yet mixed in
 
     // status
     private(set) var active = false
@@ -136,6 +141,7 @@ final class Extractor {
         slot = nil; active = false; soloSec = 0; refreshes = 0; quality = -1; clipScore = 0
         ambient = false; skips = 0; lp = 0
         subtracting = nil; subtractSuspended = false; pending = []; loadHist = []; centroid = nil; interfCentroid = nil
+        adding = nil; extraTail = []
         handoff.withLock { newClip = nil; newInterf = nil }
         autoGainDB = 0; levelEnv = 0
         sessionFile = nil; sessionName = ""
@@ -189,7 +195,8 @@ final class Extractor {
             if active, let tse {
                 let t0 = CFAbsoluteTimeGetCurrent()
                 var feed = y
-                if Tuning.subtract && !subtractSuspended, let t2 = tse2 {
+                let second = extraSlot != nil                   // two people picked: no subtraction, the second filter adds instead
+                if !second && Tuning.subtract && !subtractSuspended, let t2 = tse2 {
                     pending += y
                     if t2.hasVoice && subtracting != nil {
                         var b = [Float](repeating: 0, count: y.count + 2048)
@@ -204,6 +211,16 @@ final class Extractor {
                 let k = feed.isEmpty ? 0 : Int(feed.withUnsafeBufferPointer { fp in out.withUnsafeMutableBufferPointer { op in
                     tse.push(fp.baseAddress!, count: Int32(feed.count), out: op.baseAddress!, capacity: Int32(op.count)) } })
                 var clean = Array(out[0..<k])
+                if second, adding == extraSlot, let t2 = tse2, t2.hasVoice, !feed.isEmpty {
+                    var b = [Float](repeating: 0, count: feed.count + 4096)
+                    let k2 = Int(feed.withUnsafeBufferPointer { fp in b.withUnsafeMutableBufferPointer { bp in
+                        t2.push(fp.baseAddress!, count: Int32(feed.count), out: bp.baseAddress!, capacity: Int32(bp.count)) } })
+                    extraTail += b[0..<k2]
+                    let m = min(clean.count, extraTail.count)      // both filters hold back the same ~24 ms, so these line up
+                    for i in 0..<m { clean[i] += extraTail[i] }
+                    extraTail.removeFirst(m)
+                    if extraTail.count > 4800 { extraTail.removeFirst(extraTail.count - 4800) }
+                }
                 if denoising, let d = Denoiser.shared.process(clean) { clean = d }
                 if Tuning.brighten { clean = brighten(clean) }
                 if Tuning.autoLevel { clean = autoLevel(clean) }
@@ -270,7 +287,7 @@ final class Extractor {
         let want = enabled ? wantedSlot : nil
         if want != slot {
             slot = want; active = false; soloSec = 0; lastClipFrames = []; lastTry = 0; quality = -1; centroid = nil
-            subtracting = nil; interfCentroid = nil; pending = []
+            subtracting = nil; interfCentroid = nil; pending = []; adding = nil; extraTail = []
             handoff.withLock { newClip = nil; newInterf = nil }
             ambient = false
             audio.endClean(); voices.setExtraction(false)
@@ -294,7 +311,8 @@ final class Extractor {
                 log("clip", ["slot": s, "first": c.first, "solo_sec": c.solo, "score": Double(c.score)])
             }
         }
-        if let i, let t2 = tse2, i.slot != s {
+        // (a result for someone who is no longer wanted is dropped: it must never replace the second person's voice)
+        if let i, let t2 = tse2, i.slot != s, extraSlot == nil || i.slot == extraSlot {
             if !pending.isEmpty, active {                      // flush what the old interrupter stream still held
                 var out = [Float](repeating: 0, count: pending.count + 4096)
                 let k = Int(pending.withUnsafeBufferPointer { fp in out.withUnsafeMutableBufferPointer { op in
@@ -303,11 +321,21 @@ final class Extractor {
                 produced16 += k; audio.writeClean(upR.up(Array(out[0..<k]))); pending = []
             }
             if i.clip.withUnsafeBufferPointer({ t2.setVoice($0.baseAddress!, count: Int32($0.count), resetState: true) }) {
-                subtracting = i.slot; interfCentroid = i.centroid
-                log("subtract", ["interrupter": i.slot])
+                if i.slot == extraSlot {                        // a second picked person: add them
+                    adding = i.slot; subtracting = nil; interfCentroid = nil; extraTail = []; t2.restart()
+                    log("second_voice", ["slot": i.slot])
+                } else if extraSlot == nil {
+                    subtracting = i.slot; interfCentroid = i.centroid
+                    log("subtract", ["interrupter": i.slot])
+                }
             }
         }
 
+        if adding != nil && adding != extraSlot {            // the second person was unpicked (or swapped)
+            adding = nil; extraTail = []; subtracting = nil; lastInterf = 0
+            log("second_voice", ["slot": -1])
+        }
+        if extraSlot != nil && subtracting != nil { subtracting = nil; pending = [] }
         guard !sideBusy else { return }
         if !active {
             if now - lastTry < 0.5 { return }
@@ -316,7 +344,10 @@ final class Extractor {
         } else if now - lastRefresh >= 10 {
             lastRefresh = now
             runSide { self.buildClip(slot: s, first: false) }
-        } else if Tuning.subtract && !subtractSuspended && now - lastInterf >= 3 {
+        } else if let e = extraSlot, e != s, adding != e, now - lastInterf >= 0.5 {
+            lastInterf = now
+            runSide { self.buildSecond(slot: e) }
+        } else if extraSlot == nil && Tuning.subtract && !subtractSuspended && now - lastInterf >= 3 {
             lastInterf = now
             runSide { self.pickInterrupter(target: s) }
         } else if now - lastQuality >= 3 && Voiceprint.shared.ready {
@@ -409,6 +440,17 @@ final class Extractor {
         while clip.count < 48000 { clip += clip }
         let c = Voiceprint.shared.ready ? Voiceprint.shared.embed(Array(clip.prefix(24000))) : nil
         handoff.withLock { newInterf = (Array(clip.suffix(48000)), best.0, c) }
+    }
+
+    /// The second picked person's clip: their most recent stretches of talking alone (needs 2 s, like the first).
+    private func buildSecond(slot e: Int) {
+        let fLen = 1280
+        let frames = voices.soloFrames(slot: e).filter { $0.0 * fLen >= max(0, histW - histSize + fLen) && ($0.0 + 1) * fLen <= histW }
+        guard frames.count >= 25 else { return }
+        var clip: [Float] = []
+        for (f, _) in frames.suffix(60) { clip += (0..<fLen).map { hist[(f * fLen + $0) & (histSize - 1)] } }
+        while clip.count < 48000 { clip += clip }
+        handoff.withLock { newInterf = (Array(clip.suffix(48000)), e, nil) }
     }
 
     /// Quality meter: does the last 1.5 s of what we played sound like the person? (and not like the interrupter)

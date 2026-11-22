@@ -34,6 +34,14 @@ final class Voices {
     let hangover = 4                                   // frames (0.32 s)
 
     private var selectedSlot: Int? = nil
+    /// A second picked person: the mute opens for them exactly as for the first.
+    private var alsoSlot: Int? = nil
+    func selectAlso(_ slot: Int?) {
+        lock.withLock {
+            alsoSlot = slot
+            if selectedSlot != nil, latestFrame >= 0 { recompute(from: max(0, latestFrame - 100)) }
+        }
+    }
     /// The selected slot is talking, but the voiceprint says it is someone else right now: treat as not our person.
     var blocked = false
     private var extraction = false          // voice filter running: when nobody is detected, let the filtered audio through
@@ -177,9 +185,11 @@ final class Voices {
         for f in from...latestFrame {
             guard let p = preds[f] else { continue }
             let wasT = tgt
-            if p[s] > tOn && !blocked { tgt = true } else if p[s] < tOff || blocked { tgt = false }
-            for k in 0..<4 where k != s { if p[k] > oOn { oth[k] = true } else if p[k] < oOff { oth[k] = false } }
-            let other = (0..<4).contains { $0 != s && oth[$0] }
+            let a = alsoSlot.flatMap { $0 != s ? $0 : nil }      // the second picked person, if any
+            let mine = max(blocked ? 0 : p[s], a.map { p[$0] } ?? 0)
+            if mine > tOn { tgt = true } else if mine < tOff { tgt = false }
+            for k in 0..<4 where k != s && k != a { if p[k] > oOn { oth[k] = true } else if p[k] < oOff { oth[k] = false } }
+            let other = (0..<4).contains { $0 != s && $0 != a && oth[$0] }
             if tgt { lastT = f }
             run = (other && !tgt) ? run + 1 : 0
             let v: Float
@@ -200,8 +210,9 @@ final class Voices {
         var v: Float = 1
         for f in max(0, start)...latestFrame {
             guard let p = preds[f] else { continue }
-            let target = p[s] > threshold && !blocked
-            let other = (0..<4).contains { $0 != s && p[$0] > threshold }
+            let a = alsoSlot.flatMap { $0 != s ? $0 : nil }
+            let target = (p[s] > threshold && !blocked) || (a.map { p[$0] > threshold } ?? false)
+            let other = (0..<4).contains { $0 != s && $0 != a && p[$0] > threshold }
             if target { v = 1 }
             else if other { v = 0 }
             else if extraction { v = 1 }

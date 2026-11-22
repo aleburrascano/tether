@@ -12,6 +12,9 @@ final class Model: ObservableObject {
     @Published var modelReady = false
     @Published var bubbles: [Bubble] = []
     @Published var selected: Int? = nil
+    /// A second voice picked as well (heard together with `selected`). Only ever set while `selected` is.
+    @Published var selectedAlso: Int? = nil
+    @Published var alsoActive = false
     @Published var listening = true
     @Published var delay: Double = 0.3
     @Published var boost: Double = 12
@@ -146,6 +149,7 @@ final class Model: ObservableObject {
             route = audio.routeText
             speakerWarning = audio.outputIsSpeaker
             selected = nil; selectedSlot = nil; bubbles = []; nextMetricFrame = 0
+            selectedAlso = nil; alsoActive = false; extractor.extraSlot = nil; voices.selectAlso(nil)
             applyListen()
             voices.blocked = false
             voices.select(nil)
@@ -186,7 +190,25 @@ final class Model: ObservableObject {
     /// whether a voice is ready to be picked. (Read only: nothing in the audio path depends on it.)
     func soloSeconds(_ b: Bubble) -> Double { Double(voices.soloFrames(slot: b.slot).count) * Audio.frameSec }
 
+    /// Tap a voice. Nobody picked: it becomes the one you hear. One picked: a different voice is added as a second
+    /// (two at most; a third replaces the second). Tap a picked voice again to drop it.
     func tap(_ b: Bubble) {
+        if let first = selected, first != b.id {                 // add / drop / swap the second voice
+            selectedAlso = (selectedAlso == b.id) ? nil : b.id
+            let slot = selectedAlso == nil ? nil : b.slot
+            extractor.extraSlot = slot; voices.selectAlso(slot)
+            event("select_also", ["slot": slot ?? -1])
+            return
+        }
+        if selected == b.id, let also = selectedAlso, let other = bubbles.first(where: { $0.id == also }) {
+            // dropping the first while a second is picked: the second becomes the one you hear
+            selectedAlso = nil; extractor.extraSlot = nil; voices.selectAlso(nil)
+            selected = other.id; selectedSlot = other.slot
+            voices.blocked = false; extractor.framesFilter = nil
+            voices.select(selectedSlot); extractor.wantedSlot = selectedSlot
+            applyListen(); event("select", ["slot": other.slot, "person": -1])
+            return
+        }
         selected = (selected == b.id) ? nil : b.id
         selectedSlot = selected == nil ? nil : b.slot
         voices.blocked = false
@@ -246,6 +268,7 @@ final class Model: ObservableObject {
         for e in extractor.drainEvents() { write(e.merging(["t": (Date().timeIntervalSince(t0) * 1000).rounded() / 1000]) { a, _ in a }) }
         clipScore = Double(extractor.clipScore); quality = Double(extractor.quality)
         subtracting = extractor.subtracting; filterLoad = extractor.load; autoGainDB = Double(extractor.autoGainDB)
+        alsoActive = extractor.adding != nil && extractor.adding == extractor.extraSlot
         filterActive = extractor.active; soloSec = extractor.soloSec; filterMs = extractor.ms; filterRefreshes = extractor.refreshes
         let tot = audio.cleanHits + audio.cleanMisses
         filterCoverage = tot > 0 ? Double(audio.cleanHits) / Double(tot) : 0

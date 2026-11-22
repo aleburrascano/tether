@@ -86,7 +86,7 @@ struct ContentView: View {
     private func heard(_ room: Float) -> Float {
         guard m.running, !m.speakerWarning else { return 0 }
         guard let s = m.selected else { return 0 }                  // nobody picked: silence
-        return (m.bubbles.first { $0.id == s }?.talking ?? false) ? room : room * 0.08
+        return (m.bubbles.contains { ($0.id == s || $0.id == m.selectedAlso) && $0.talking }) ? room : room * 0.08
     }
 
     private var tone: Color { !m.running ? Look.text3 : m.speakerWarning ? Look.orange : (m.bubbles.contains { $0.talking } ? Look.green : Look.text2) }
@@ -121,7 +121,8 @@ struct ContentView: View {
                     Shown(id: 2, talking: true, state: .learning, bubble: nil, name: "Speaker 3")]
         }
         return m.bubbles.map { b in
-            let state: VoiceState = m.selected == b.id ? (m.filterActive ? .on : .starting) : (ready.contains(b.id) ? .ready : .learning)
+            let state: VoiceState = m.selected == b.id ? (m.filterActive ? .on : .starting)
+                : (m.selectedAlso == b.id ? (m.alsoActive ? .on : .starting) : (ready.contains(b.id) ? .ready : .learning))
             // "Speaker 2" until the agent works out who they are; two voices with the same name keep their number
             var name = "Speaker \(b.id + 1)"
             if let label = agent.labels[b.id] {
@@ -199,10 +200,10 @@ struct ContentView: View {
                 AgentCard(alert: Agent.Alert(who: "Barista", summary: "Order 42 is ready", voice: nil)) { _ in }.allowsHitTesting(false)
             }
             // the question is only asked about a voice you can actually pick (grey), never a red one
-            if let a = agent.alert, m.running, !touring, let av = a.voice, ready.contains(av), m.selected != av {
+            if let a = agent.alert, m.running, !touring, let av = a.voice, ready.contains(av), m.selected != av, m.selectedAlso != av {
                 AgentCard(alert: a) { yes in
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    if yes, let v = a.voice, m.selected != v, ready.contains(v), let b = m.bubbles.first(where: { $0.id == v }) { m.tap(b) }
+                    if yes, let v = a.voice, m.selected != v, m.selectedAlso != v, ready.contains(v), let b = m.bubbles.first(where: { $0.id == v }) { m.tap(b) }
                     withAnimation(Look.ease) { agent.dismiss() }
                 }
                 .transition(.opacity.combined(with: .offset(y: 12)))

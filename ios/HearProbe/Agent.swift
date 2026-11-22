@@ -51,7 +51,7 @@ final class Agent: ObservableObject {
         let who = talkers.suffix(Int(Double(end - from) / sr * 10)).map(String.init).joined(separator: ",")
         talkers = []
         let fresh = !started
-        let selected = m.selected
+        let selected = [m.selected, m.selectedAlso].compactMap { $0 }
         busy = true
         Task {
             let reply = await Agent.send(clip, fresh: fresh, who: who, selected: selected)
@@ -61,7 +61,7 @@ final class Agent: ObservableObject {
             if reply.labels != labels { labels = reply.labels }
             if let a = reply.alert, a.id != lastAlertID {
                 lastAlertID = a.id
-                if m.selected != a.voice { alert = Alert(who: a.who, summary: a.summary, voice: a.voice); shown = 0 }
+                if m.selected != a.voice && m.selectedAlso != a.voice { alert = Alert(who: a.who, summary: a.summary, voice: a.voice); shown = 0 }
             }
         }
     }
@@ -95,10 +95,10 @@ final class Agent: ObservableObject {
     struct Reply { let alert: (id: Int, who: String, summary: String, voice: Int)?; let labels: [Int: String] }
 
     /// Hand the Mac the newest sound; it answers with what it knows so far. nil = the Mac did not answer.
-    nonisolated static func send(_ clip: [Float], fresh: Bool, who: String, selected: Int?) async -> Reply? {
+    nonisolated static func send(_ clip: [Float], fresh: Bool, who: String, selected: [Int]) async -> Reply? {
         var parts = URLComponents(string: "http://\(host)/chunk")
         parts?.queryItems = [URLQueryItem(name: "fresh", value: fresh ? "1" : "0"), URLQueryItem(name: "who_", value: who),
-                             URLQueryItem(name: "sel", value: selected.map(String.init) ?? "")]
+                             URLQueryItem(name: "sel", value: selected.map(String.init).joined(separator: ","))]
         guard let url = parts?.url else { return nil }
         var request = URLRequest(url: url, timeoutInterval: 8)
         request.httpMethod = "POST"
