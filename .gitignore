@@ -20,3 +20,4 @@ ios/*.xcodeproj/
 tools/vpcal/.build/
 .DS_Store
 xcuserdata/
+models.zip

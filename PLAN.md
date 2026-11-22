@@ -1,4 +1,6 @@
-# Tether: plan (one page, keep it current)
+# Tether: working notes (app folder is still HearProbe)
+
+This is the running lab notebook, not documentation: see README.md for how the app works today. Defaults quoted below are from the time of each note (current: delay 0.6 s, boost +4 dB, interrupter subtraction off).
 
 **Goal:** sit anywhere with your phone on the table and AirPods in. The app shows the people talking, you tap one, and you hear only them, in near real time (under ~1 s).
 **Hardware:** iPhone 13 Pro + AirPods/headphones. No camera, no phone next to each person, no voice-sample step.
