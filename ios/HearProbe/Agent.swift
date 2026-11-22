@@ -46,6 +46,8 @@ final class Agent: ObservableObject {
         let total = count.values.reduce(0, +)
         let solo: Int? = top.flatMap { $0.value >= 15 && Double($0.value) >= 0.7 * Double(total) ? $0.key : nil }
         let voice = solo ?? top?.key ?? lastTalker
+        // if the voice you are already hearing did a fair share of the talking in this clip, there is nothing to ask
+        let mine = m.selected.map { sel in voice == sel || Double(count[sel] ?? 0) >= 0.35 * Double(max(1, total)) } ?? false
         talk = [:]
         busy = true
         let fresh = asked == 0; asked += 1
@@ -53,7 +55,7 @@ final class Agent: ObservableObject {
             let (found, names) = await Agent.ask(clip, fresh: fresh, voice: solo)
             busy = false
             if let names, names != labels { labels = names }
-            if let found, !(voice != nil && m.selected == voice) {                  // already listening to them: no need to ask
+            if let found, !mine, !(voice != nil && m.selected == voice) {                  // already listening to them: no need to ask
                 let again = found.1 == lastSaid && Date().timeIntervalSince(lastSaidAt) < 20
                 if !again, alert == nil { alert = Alert(who: found.0, summary: found.1, voice: voice); shown = 0 }
                 lastSaid = found.1; lastSaidAt = Date()
