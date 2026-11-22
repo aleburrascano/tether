@@ -258,7 +258,7 @@ struct Welcome: View {
             let panel: CGFloat = 176
             // the whole ear, centred in the open space between the words and the button panel
             let top: CGFloat = 196, room = geo.size.height - panel - top
-            let earH = min(room * 0.86, geo.size.width * 0.74 * 1.288), earW = earH / 1.288
+            let earH = min(room * 0.86, geo.size.width * 0.74 * 1.305), earW = earH / 1.305
             let earMid = CGPoint(x: geo.size.width / 2, y: top + room / 2)
             ZStack(alignment: .topLeading) {
                 Color.white.ignoresSafeArea()
