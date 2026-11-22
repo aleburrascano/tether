@@ -181,6 +181,11 @@ final class Model: ObservableObject {
         running = false
     }
 
+    /// How many seconds of this voice talking alone the app has heard lately. The voice filter needs
+    /// `Extractor.minSoloSec` of it before it can pick that person out, so the screen uses this to show
+    /// whether a voice is ready to be picked. (Read only: nothing in the audio path depends on it.)
+    func soloSeconds(_ b: Bubble) -> Double { Double(voices.soloFrames(slot: b.slot).count) * Audio.frameSec }
+
     func tap(_ b: Bubble) {
         selected = (selected == b.id) ? nil : b.id
         selectedSlot = selected == nil ? nil : b.slot

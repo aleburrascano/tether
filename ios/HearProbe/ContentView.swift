@@ -11,7 +11,10 @@ enum Look {
     static let text2 = Color(red: 0.631, green: 0.631, blue: 0.667)
     static let text3 = Color(red: 0.388, green: 0.388, blue: 0.420)
     static let accent = Color(red: 0.247, green: 0.847, blue: 0.784)
-    static let orange = Color(red: 1.0, green: 0.624, blue: 0.039)      // the voice you picked, and the agent
+    static let orange = Color(red: 1.0, green: 0.624, blue: 0.039)      // the agent
+    static let green = Color(red: 0.20, green: 0.84, blue: 0.45)        // the voice you hear
+    static let red = Color(red: 0.93, green: 0.33, blue: 0.31)          // a voice the app is still learning
+    static let plum = Color(red: 0.290, green: 0.184, blue: 0.322)      // the mascot's background
     static let ease = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.32)
 }
 
@@ -21,10 +24,17 @@ struct ContentView: View {
     @StateObject private var agent = Agent()
     @State private var showSettings = false
     @State private var history = [Float](repeating: 0, count: 44)
+    @State private var ready: Set<Int> = []          // voices heard alone for long enough to be picked
+    @State private var ticks = 0
+    @AppStorage("tourDone") private var tourDone = false
+    @State private var tourStep = 0                   // 0 = welcome, 1... = the walkthrough
+    @State private var marks: [String: CGRect] = [:]
     private let tick = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
     /// Each voice sits a little off the row, so they look placed rather than lined up.
     private static let drop: [CGFloat] = [4, 22, 10, 26], shift: [CGFloat] = [-5, 6, -2, 7]
+
+    private var touring: Bool { !tourDone && tourStep > 0 }
 
     var body: some View {
         ZStack {
@@ -32,18 +42,38 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 topBar.frame(height: 44)
                 stage.frame(maxHeight: .infinity)
-                bottom.frame(height: 150)
+                bottom.frame(height: 150).tourMark("bars")
             }
             .padding(.horizontal, 20).padding(.top, 6).padding(.bottom, 10)
+            if touring {
+                Tour(step: $tourStep, marks: marks) { withAnimation(Look.ease) { tourDone = true } }
+            }
+            if !tourDone && tourStep == 0 {
+                Welcome(start: { withAnimation(Look.ease) { tourStep = 1 } }, skip: { withAnimation(Look.ease) { tourDone = true } })
+                    .transition(.opacity)
+            }
         }
+        .coordinateSpace(name: "screen")
+        .onPreferenceChange(TourMarks.self) { marks = $0 }
         .preferredColorScheme(.dark)
         .onAppear { m.loadModel() }
+        .onChange(of: tourDone) { _, done in if !done { tourStep = 0 } }
         .onReceive(tick) { _ in
+            ticks += 1
+            if touring {                                   // the walkthrough shows a pretend room
+                history.removeFirst(); history.append(Float(0.35 + 0.3 * sin(Double(ticks) * 0.5) * sin(Double(ticks) * 0.13)))
+                brain.step(heard: 0.55, dt: 0.1)
+                return
+            }
             // -60 dB and below = 0, -15 dB = 1 (what the level bars show)
             let v = m.running ? max(0, min(1, (m.level + 60) / 45)) : 0
             history.removeFirst(); history.append(v)
             brain.step(heard: heard(v), dt: 0.1)
             agent.tick(m)
+            if ticks % 5 == 0 {                            // twice a second: which voices are ready to pick
+                let now = Set(m.bubbles.filter { m.soloSeconds($0) >= Extractor.minSoloSec }.map { $0.id })
+                if now != ready { withAnimation(Look.ease) { ready = now } }
+            }
         }
         .sheet(isPresented: $showSettings) {
             SettingsSheet(m: m).presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
@@ -58,7 +88,7 @@ struct ContentView: View {
         return (m.bubbles.first { $0.id == s }?.talking ?? false) ? room : room * 0.08
     }
 
-    private var tone: Color { !m.running ? Look.text3 : m.speakerWarning ? Look.orange : (m.bubbles.contains { $0.talking } ? Look.orange : Look.text2) }
+    private var tone: Color { !m.running ? Look.text3 : m.speakerWarning ? Look.orange : (m.bubbles.contains { $0.talking } ? Look.green : Look.text2) }
 
     private var topBar: some View {
         HStack(spacing: 8) {
@@ -71,7 +101,7 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("Mark this moment")
             }
-            startStop
+            startStop.tourMark("play")
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape").font(.system(size: 20)).foregroundStyle(Look.text2).frame(width: 40, height: 44, alignment: .trailing)
             }
@@ -79,10 +109,27 @@ struct ContentView: View {
         }
     }
 
-    // The voices on top, the brain in the middle; the voice you picked is joined to the brain by a line of sound.
+    /// One voice as the screen shows it.
+    private struct Shown: Identifiable { let id: Int; let talking: Bool; let state: VoiceState; let bubble: Model.Bubble? }
+
+    /// Red: the app has not heard enough of this voice alone yet, so it cannot be picked.
+    /// Grey: ready, tap it. Green: this is who you hear.
+    private var shown: [Shown] {
+        if touring {
+            return [Shown(id: 0, talking: true, state: .on, bubble: nil), Shown(id: 1, talking: false, state: .ready, bubble: nil),
+                    Shown(id: 2, talking: true, state: .learning, bubble: nil)]
+        }
+        return m.bubbles.map { b in
+            let state: VoiceState = m.selected == b.id ? (m.filterActive ? .on : .starting) : (ready.contains(b.id) ? .ready : .learning)
+            return Shown(id: b.id, talking: b.talking, state: state, bubble: b)
+        }
+    }
+
+    // The voices on top, the brain in the middle; the voice you hear is joined to the brain by a line of sound.
     private var stage: some View {
         GeometryReader { geo in
-            let n = max(1, m.bubbles.count)
+            let voices = shown
+            let n = max(1, voices.count)
             let size: CGFloat = n <= 3 ? 62 : 54
             let brainSide = min(geo.size.width, geo.size.height - 110)
             let brainMid = CGPoint(x: geo.size.width / 2, y: 110 + (geo.size.height - 110) / 2)
@@ -90,35 +137,41 @@ struct ContentView: View {
                 CGPoint(x: geo.size.width * (CGFloat(i) + 0.5) / CGFloat(n) + Self.shift[id & 3], y: 16 + size / 2 + Self.drop[id & 3])
             }
             ZStack {
-                ForEach(Array(m.bubbles.enumerated()), id: \.element.id) { i, b in
-                    if m.selected == b.id {
-                        SoundLine(from: place(i, b.id), to: CGPoint(x: brainMid.x - brainSide * 0.04, y: brainMid.y + brainSide * 0.04),
-                                  lively: b.talking && m.filterActive ? 1 : 0.25, seed: Double(b.id))
+                Color.clear.frame(width: geo.size.width, height: 112).position(x: geo.size.width / 2, y: 56).tourMark("voices")
+                ForEach(Array(voices.enumerated()), id: \.element.id) { i, v in
+                    if v.state == .on || v.state == .starting {
+                        SoundLine(from: place(i, v.id), to: CGPoint(x: brainMid.x - brainSide * 0.04, y: brainMid.y + brainSide * 0.04),
+                                  lively: v.talking && v.state == .on ? 1 : 0.25, seed: Double(v.id))
                     }
                 }
                 Brain3DView(brain: brain).frame(width: brainSide, height: brainSide).position(brainMid)
-                    .opacity(m.running ? 1 : 0.55)
+                    .opacity(m.running || touring ? 1 : 0.55)
                     .accessibilityLabel("Illustration of a brain that brightens with the sound you hear")
-                ForEach(Array(m.bubbles.enumerated()), id: \.element.id) { i, b in
-                    let chosen = m.selected == b.id
+                Color.clear.frame(width: brainSide * 0.9, height: brainSide * 0.62).position(brainMid).tourMark("brain").allowsHitTesting(false)
+                ForEach(Array(voices.enumerated()), id: \.element.id) { i, v in
                     ZStack {
-                        WavyBlob(colour: chosen ? Look.orange : Color(white: 0.56), size: size, level: b.talking ? 1 : 0, seed: Double(b.id) * 1.7)
+                        WavyBlob(colour: v.state.colour, size: size, level: v.talking ? 1 : 0, seed: Double(v.id) * 1.7)
                             .frame(width: size * 1.7, height: size * 1.7)
-                        Text("\(b.id + 1)").font(.system(size: 19, weight: .semibold, design: .monospaced)).foregroundStyle(chosen ? Look.bg : .white)
+                        Text("\(v.id + 1)").font(.system(size: 19, weight: .semibold, design: .monospaced)).foregroundStyle(v.state == .on ? Look.bg : .white)
                     }
-                    .opacity(m.selected != nil && !chosen ? 0.45 : 1)
+                    .opacity(v.state == .learning ? 0.8 : 1)
                     .contentShape(Circle())
                     .onTapGesture {
+                        guard let b = v.bubble else { return }
+                        if v.state == .learning {                                   // not ready: say no, do nothing
+                            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                            return
+                        }
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         withAnimation(Look.ease) { m.tap(b) }
                     }
-                    .position(place(i, b.id))
+                    .position(place(i, v.id))
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
-                    .accessibilityLabel("Voice \(b.id + 1)" + (b.talking ? ", talking" : "") + (chosen ? ", selected" : ""))
-                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel("Voice \(v.id + 1), \(v.state.spoken)" + (v.talking ? ", talking" : ""))
+                    .accessibilityAddTraits(v.state == .learning ? [] : .isButton)
                 }
             }
-            .animation(Look.ease, value: m.bubbles.map { $0.id })
+            .animation(Look.ease, value: voices.map { $0.id })
         }
     }
 
@@ -126,17 +179,20 @@ struct ContentView: View {
     /// is written over them in a few big words; the agent's question sits on top of everything.
     private var bottom: some View {
         ZStack {
-            Levels(history: history, tone: tone).padding(.vertical, 6).opacity(m.running ? (notice == nil ? 1 : 0.25) : 0.3)
-            if let notice, agent.alert == nil {
+            Levels(history: history, tone: touring ? Look.green : tone).padding(.vertical, 6).opacity(touring ? 1 : (m.running ? (notice == nil ? 1 : 0.25) : 0.3))
+            if let notice, agent.alert == nil, !touring {
                 VStack(spacing: 4) {
                     Text(notice.0).font(.system(size: 28, weight: .semibold)).tracking(-0.5).foregroundStyle(m.speakerWarning && m.running ? Look.orange : Look.text)
                     if !notice.1.isEmpty { Text(notice.1).font(.system(size: 15)).foregroundStyle(Look.text2).multilineTextAlignment(.center).lineLimit(2) }
                 }
             }
-            if let a = agent.alert, m.running {
+            if touring && tourStep == 4 {
+                AgentCard(alert: Agent.Alert(who: "Barista", summary: "Order 42 is ready", voice: nil)) { _ in }.allowsHitTesting(false)
+            }
+            if let a = agent.alert, m.running, !touring {
                 AgentCard(alert: a) { yes in
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    if yes, let v = a.voice, m.selected != v, let b = m.bubbles.first(where: { $0.id == v }) { m.tap(b) }
+                    if yes, let v = a.voice, m.selected != v, ready.contains(v), let b = m.bubbles.first(where: { $0.id == v }) { m.tap(b) }
                     withAnimation(Look.ease) { agent.dismiss() }
                 }
                 .transition(.opacity.combined(with: .offset(y: 12)))
@@ -150,7 +206,6 @@ struct ContentView: View {
         if !m.modelReady { return ("Getting ready", m.modelStatus) }
         if !m.running { return ("Press play", "") }
         if m.speakerWarning { return ("Connect headphones", "Nothing is played without them.") }
-        if m.selected != nil && !m.filterActive { return ("Learning the voice", "Keep them talking.") }
         return nil
     }
 
@@ -170,6 +225,127 @@ struct ContentView: View {
         .buttonStyle(Press())
         .disabled(!m.modelReady).opacity(m.modelReady ? 1 : 0.4)
         .accessibilityLabel(m.running ? "Pause listening" : "Start listening")
+    }
+}
+
+enum VoiceState {
+    case learning, ready, starting, on
+    var colour: Color { switch self { case .learning: return Look.red; case .ready, .starting: return Color(white: 0.56); case .on: return Look.green } }
+    var spoken: String { switch self { case .learning: return "still learning, not ready"; case .ready: return "ready to pick"; case .starting: return "starting"; case .on: return "this is who you hear" } }
+}
+
+// MARK: - Welcome and walkthrough
+
+/// Where things are on the screen, so the walkthrough can point at them.
+struct TourMarks: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue()) { _, new in new } }
+}
+extension View {
+    func tourMark(_ name: String) -> some View {
+        background(GeometryReader { g in Color.clear.preference(key: TourMarks.self, value: [name: g.frame(in: .named("screen"))]) })
+    }
+}
+
+/// The first thing you see: the mascot and one button.
+struct Welcome: View {
+    let start: () -> Void, skip: () -> Void
+    @State private var up = false
+    var body: some View {
+        ZStack {
+            Look.bg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                Spacer()
+                Image("Mascot").resizable().scaledToFit().frame(width: 210, height: 210)
+                    .clipShape(RoundedRectangle(cornerRadius: 48, style: .continuous))
+                    .offset(y: up ? -6 : 6)
+                    .accessibilityLabel("Tether's mascot, a smiling ear")
+                Text("Tether").font(.system(size: 44, weight: .bold)).tracking(-1).foregroundStyle(Look.text).padding(.top, 30)
+                Text("Hear who you want.").font(.system(size: 20)).foregroundStyle(Look.text2).padding(.top, 4)
+                Spacer()
+                Button(action: start) {
+                    Text("Show me how").font(.system(size: 19, weight: .semibold)).foregroundStyle(Look.bg)
+                        .frame(maxWidth: .infinity).frame(height: 56).background(Look.green, in: RoundedRectangle(cornerRadius: 18))
+                }
+                .buttonStyle(Press())
+                Button(action: skip) { Text("Skip").font(.system(size: 17, weight: .medium)).foregroundStyle(Look.text2).frame(height: 48) }
+            }
+            .padding(.horizontal, 24).padding(.bottom, 12)
+        }
+        .onAppear { withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { up = true } }
+    }
+}
+
+/// The walkthrough: the screen dims, one part stays lit, and the mascot says what it is.
+struct Tour: View {
+    @Binding var step: Int
+    let marks: [String: CGRect]
+    let done: () -> Void
+
+    private static let steps: [(mark: String, title: String, text: String)] = [
+        ("voices", "Voices show up here", "Red is still learning. Grey is ready, tap it. Green is who you hear."),
+        ("brain", "This lights up", "The more sound reaches you, the brighter it gets. It is a picture, not a brain scan."),
+        ("bars", "The room's sound", "Big bars mean a loud room."),
+        ("bars", "I'll tell you", "If someone calls you, I ask if you want to hear them."),
+        ("play", "Press play", "Put your headphones in first."),
+    ]
+
+    var body: some View {
+        let i = min(max(step, 1), Tour.steps.count) - 1
+        let s = Tour.steps[i]
+        let last = i == Tour.steps.count - 1
+        GeometryReader { geo in
+            let hole = (marks[s.mark] ?? CGRect(x: 20, y: geo.size.height / 3, width: geo.size.width - 40, height: 120)).insetBy(dx: -8, dy: -8)
+            let below = hole.midY < geo.size.height * 0.45
+            ZStack(alignment: .topLeading) {
+                // dim everything except the part being explained
+                Canvas { ctx, size in
+                    var shade = Path(CGRect(origin: .zero, size: size))
+                    shade.addRoundedRect(in: hole, cornerSize: CGSize(width: 22, height: 22))
+                    ctx.fill(shade, with: .color(.black.opacity(0.78)), style: FillStyle(eoFill: true))
+                    ctx.stroke(Path(roundedRect: hole, cornerRadius: 22), with: .color(Look.green.opacity(0.9)), lineWidth: 2)
+                }
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { next(last) }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top, spacing: 14) {
+                        Image("Mascot").resizable().scaledToFit().frame(width: 58, height: 58).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(s.title).font(.system(size: 24, weight: .semibold)).tracking(-0.4).foregroundStyle(Look.text)
+                            Text(s.text).font(.system(size: 17)).foregroundStyle(Look.text2).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    HStack(spacing: 6) {
+                        ForEach(0..<Tour.steps.count, id: \.self) { k in
+                            Capsule().fill(k == i ? Look.green : Color.white.opacity(0.2)).frame(width: k == i ? 18 : 6, height: 6)
+                        }
+                        Spacer()
+                        if !last { Button("Skip") { done() }.font(.system(size: 16, weight: .medium)).foregroundStyle(Look.text2).frame(height: 44).padding(.trailing, 6) }
+                        Button { next(last) } label: {
+                            Text(last ? "Got it" : "Next").font(.system(size: 17, weight: .semibold)).foregroundStyle(Look.bg)
+                                .padding(.horizontal, 22).frame(height: 44).background(Look.green, in: Capsule())
+                        }
+                        .buttonStyle(Press())
+                    }
+                }
+                .padding(18)
+                .background(Look.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Look.line, lineWidth: 1))
+                .padding(.horizontal, 16)
+                .frame(width: geo.size.width)
+                .position(x: geo.size.width / 2, y: below ? min(geo.size.height - 110, hole.maxY + 100) : max(110, hole.minY - 100))
+                .id(i).transition(.opacity)
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func next(_ last: Bool) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if last { done() } else { withAnimation(Look.ease) { step += 1 } }
     }
 }
 
@@ -256,7 +432,7 @@ struct SoundLine: View {
                         let point = CGPoint(x: from.x + dx * u + nx * swing, y: from.y + dy * u + ny * swing)
                         if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
                     }
-                    context.stroke(path, with: .color(Look.orange.opacity(0.85 - 0.25 * k)), style: StrokeStyle(lineWidth: 2.4 - 0.6 * k, lineCap: .round, lineJoin: .round))
+                    context.stroke(path, with: .color(Look.green.opacity(0.85 - 0.25 * k)), style: StrokeStyle(lineWidth: 2.4 - 0.6 * k, lineCap: .round, lineJoin: .round))
                 }
             }
         }
@@ -341,6 +517,9 @@ struct SettingsSheet: View {
                     if let e = m.extractor.loadError { mono("filter load error: \(e)") }
                     mono(m.route.isEmpty ? "not started" : m.route)
                     ProbChart(recent: m.recent).frame(height: 90)
+                }
+                Section {
+                    Button("Show the walkthrough again") { UserDefaults.standard.set(false, forKey: "tourDone"); dismiss() }
                 }
                 Section("Recording and log") {
                     Toggle("Record whole session", isOn: Binding(get: { m.recordSession }, set: { m.setRecordSession($0) }))
