@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Tether's one screen: who is talking, tap a voice to hear only that person.
-/// Monochrome with one accent; nothing scrolls. Tuning and diagnostics live in the settings sheet.
+/// Tether's one screen: the voices on top (tap one to hear only that person), a brain illustration in the
+/// middle, the room's sound as bars at the bottom, and the listening agent's question over the bars.
+/// Nothing scrolls. Tuning and diagnostics live in the settings sheet.
 enum Look {
     static let bg = Color(red: 0.035, green: 0.035, blue: 0.043)
     static let card = Color(red: 0.078, green: 0.078, blue: 0.090)
@@ -10,36 +11,30 @@ enum Look {
     static let text2 = Color(red: 0.631, green: 0.631, blue: 0.667)
     static let text3 = Color(red: 0.388, green: 0.388, blue: 0.420)
     static let accent = Color(red: 0.247, green: 0.847, blue: 0.784)
+    static let orange = Color(red: 1.0, green: 0.624, blue: 0.039)      // the voice you picked, and the agent
     static let ease = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.32)
 }
 
 struct ContentView: View {
     @StateObject private var m = Model()
+    @StateObject private var brain = BrainModel()
+    @StateObject private var agent = Agent()
     @State private var showSettings = false
     @State private var history = [Float](repeating: 0, count: 44)
     private let tick = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
+    /// Each voice sits a little off the row, so they look placed rather than lined up.
+    private static let drop: [CGFloat] = [4, 22, 10, 26], shift: [CGFloat] = [-5, 6, -2, 7]
+
     var body: some View {
         ZStack {
             Look.bg.ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(spacing: 0) {
                 topBar.frame(height: 44)
-                Spacer().frame(height: 14)
-                Text(title)
-                    .font(.system(size: 31, weight: .light)).tracking(-0.6)
-                    .foregroundStyle(m.running && m.speakerWarning ? Color.orange : Look.text).lineLimit(1).minimumScaleFactor(0.7)
-                    .id(title).transition(.opacity.combined(with: .offset(y: 8)))
-                Text(subtitle)
-                    .font(.system(size: 14)).foregroundStyle(Look.text2)
-                    .frame(height: 42, alignment: .topLeading).padding(.top, 4)
-                Levels(history: history, tone: tone).frame(maxHeight: .infinity).padding(.vertical, 6)
-                    .opacity(m.running ? 1 : 0.3)
-                voices.frame(height: 96)
-                Spacer().frame(height: 14)
-                startStop.frame(maxWidth: .infinity).frame(height: 52)
+                stage.frame(maxHeight: .infinity)
+                bottom.frame(height: 150)
             }
             .padding(.horizontal, 20).padding(.top, 6).padding(.bottom, 10)
-            .animation(Look.ease, value: title)
         }
         .preferredColorScheme(.dark)
         .onAppear { m.loadModel() }
@@ -47,28 +42,39 @@ struct ContentView: View {
             // -60 dB and below = 0, -15 dB = 1 (what the level bars show)
             let v = m.running ? max(0, min(1, (m.level + 60) / 45)) : 0
             history.removeFirst(); history.append(v)
+            brain.step(heard: heard(v), dt: 0.1)
+            agent.tick(m)
         }
         .sheet(isPresented: $showSettings) {
             SettingsSheet(m: m).presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
     }
 
-    private var tone: Color { !m.running ? Look.text3 : m.speakerWarning ? Color.orange : (m.bubbles.contains { $0.talking } ? Look.accent : Look.text2) }
+    /// How much sound reaches the headphones, 0...1: the room when you hear everyone, only the picked
+    /// voice's moments when you picked one, nothing without headphones.
+    private func heard(_ room: Float) -> Float {
+        guard m.running, !m.speakerWarning else { return 0 }
+        guard let s = m.selected else { return room }
+        return (m.bubbles.first { $0.id == s }?.talking ?? false) ? room : room * 0.08
+    }
+
+    private var tone: Color { !m.running ? Look.text3 : m.speakerWarning ? Look.orange : (m.bubbles.contains { $0.talking } ? Look.orange : Look.text2) }
 
     private var topBar: some View {
         HStack(spacing: 8) {
             Circle().fill(tone).frame(width: 8, height: 8)
             Text(!m.modelReady ? "Loading" : (!m.running ? "Paused" : (m.speakerWarning ? "No headphones" : "Playing to \(m.audio.outputName)")))
-                .font(.system(size: 14, weight: .medium)).foregroundStyle(Look.text2)
+                .font(.system(size: 14, weight: .medium)).foregroundStyle(Look.text2).lineLimit(1)
             Spacer()
             if m.running {
                 // "that sounded wrong": saves the last 10 s for a look afterwards
                 Button { m.mark() } label: {
-                    Image(systemName: m.markText.isEmpty ? "flag" : "flag.fill").font(.system(size: 18))
-                        .foregroundStyle(m.markText.isEmpty ? Look.text3 : Look.accent).frame(width: 40, height: 44)
+                    Image(systemName: m.markText.isEmpty ? "flag" : "flag.fill").font(.system(size: 17))
+                        .foregroundStyle(m.markText.isEmpty ? Look.text3 : Look.orange).frame(width: 36, height: 44)
                 }
                 .accessibilityLabel("Mark this moment")
             }
+            startStop
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape").font(.system(size: 20)).foregroundStyle(Look.text2).frame(width: 40, height: 44, alignment: .trailing)
             }
@@ -76,43 +82,79 @@ struct ContentView: View {
         }
     }
 
-    private var title: String {
-        if !m.modelReady { return "Getting ready" }
-        if !m.running { return "Not listening" }
-        if m.speakerWarning { return "Connect headphones" }
-        if let s = m.selected { return m.filterActive ? "Only voice \(s + 1)" : "Learning voice \(s + 1)" }
-        return m.bubbles.isEmpty ? "Listening" : "Hearing everyone"
-    }
-
-    private var subtitle: String {
-        if !m.error.isEmpty { return m.error }
-        if !m.modelReady { return m.modelStatus }
-        if !m.running { return "Put the phone on the table and press play." }
-        if m.speakerWarning { return "Nothing is being played. Without headphones the phone would feed back into its own microphone." }
-        if m.selected != nil { return m.filterActive ? "Everyone else is turned down. Tap the number again to hear all voices." : "Keep them talking for a couple of seconds." }
-        return m.bubbles.isEmpty ? "A voice appears after someone talks for a moment." : "Tap a voice to hear only that person."
-    }
-
-    private var voices: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("VOICES").font(.system(size: 12, weight: .medium)).tracking(0.8).foregroundStyle(Look.text3)
-            HStack(spacing: 12) {
-                ForEach(m.bubbles) { b in
-                    VoiceDot(number: b.id + 1, talking: b.talking, chosen: m.selected == b.id,
-                             dimmed: m.selected != nil && m.selected != b.id, learning: m.selected == b.id && !m.filterActive)
-                        .onTapGesture {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            withAnimation(Look.ease) { m.tap(b) }
-                        }
-                        .transition(.scale(scale: 0.6).combined(with: .opacity))
+    // The voices on top, the brain in the middle; the voice you picked is joined to the brain by a line of sound.
+    private var stage: some View {
+        GeometryReader { geo in
+            let n = max(1, m.bubbles.count)
+            let size: CGFloat = n <= 3 ? 62 : 54
+            let brainSide = min(geo.size.width, geo.size.height - 110)
+            let brainMid = CGPoint(x: geo.size.width / 2, y: 110 + (geo.size.height - 110) / 2)
+            let place = { (i: Int, id: Int) -> CGPoint in
+                CGPoint(x: geo.size.width * (CGFloat(i) + 0.5) / CGFloat(n) + Self.shift[id & 3], y: 16 + size / 2 + Self.drop[id & 3])
+            }
+            ZStack {
+                ForEach(Array(m.bubbles.enumerated()), id: \.element.id) { i, b in
+                    if m.selected == b.id {
+                        SoundLine(from: place(i, b.id), to: CGPoint(x: brainMid.x - brainSide * 0.04, y: brainMid.y + brainSide * 0.04),
+                                  lively: b.talking && m.filterActive ? 1 : 0.25, seed: Double(b.id))
+                    }
                 }
-                if m.bubbles.isEmpty {
-                    Text(m.running ? "Nobody yet" : " ").font(.system(size: 14)).foregroundStyle(Look.text3).frame(height: 56)
+                Brain3DView(brain: brain).frame(width: brainSide, height: brainSide).position(brainMid)
+                    .opacity(m.running ? 1 : 0.55)
+                    .accessibilityLabel("Illustration of a brain that brightens with the sound you hear")
+                ForEach(Array(m.bubbles.enumerated()), id: \.element.id) { i, b in
+                    let chosen = m.selected == b.id
+                    ZStack {
+                        WavyBlob(colour: chosen ? Look.orange : Color(white: 0.56), size: size, level: b.talking ? 1 : 0, seed: Double(b.id) * 1.7)
+                            .frame(width: size * 1.7, height: size * 1.7)
+                        Text("\(b.id + 1)").font(.system(size: 19, weight: .semibold, design: .monospaced)).foregroundStyle(chosen ? Look.bg : .white)
+                    }
+                    .opacity(m.selected != nil && !chosen ? 0.45 : 1)
+                    .contentShape(Circle())
+                    .onTapGesture {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(Look.ease) { m.tap(b) }
+                    }
+                    .position(place(i, b.id))
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                    .accessibilityLabel("Voice \(b.id + 1)" + (b.talking ? ", talking" : "") + (chosen ? ", selected" : ""))
+                    .accessibilityAddTraits(.isButton)
                 }
-                Spacer(minLength: 0)
             }
             .animation(Look.ease, value: m.bubbles.map { $0.id })
         }
+    }
+
+    /// The sound of the room as bars. Anything you must know (still loading, no headphones, an error)
+    /// is written over them in a few big words; the agent's question sits on top of everything.
+    private var bottom: some View {
+        ZStack {
+            Levels(history: history, tone: tone).padding(.vertical, 6).opacity(m.running ? (notice == nil ? 1 : 0.25) : 0.3)
+            if let notice, agent.alert == nil {
+                VStack(spacing: 4) {
+                    Text(notice.0).font(.system(size: 28, weight: .semibold)).tracking(-0.5).foregroundStyle(m.speakerWarning && m.running ? Look.orange : Look.text)
+                    if !notice.1.isEmpty { Text(notice.1).font(.system(size: 15)).foregroundStyle(Look.text2).multilineTextAlignment(.center).lineLimit(2) }
+                }
+            }
+            if let a = agent.alert, m.running {
+                AgentCard(alert: a) { yes in
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    if yes, let v = a.voice, m.selected != v, let b = m.bubbles.first(where: { $0.id == v }) { m.tap(b) }
+                    withAnimation(Look.ease) { agent.dismiss() }
+                }
+                .transition(.opacity.combined(with: .offset(y: 12)))
+            }
+        }
+        .animation(Look.ease, value: agent.alert)
+    }
+
+    private var notice: (String, String)? {
+        if !m.error.isEmpty { return ("Problem", m.error) }
+        if !m.modelReady { return ("Getting ready", m.modelStatus) }
+        if !m.running { return ("Press play", "") }
+        if m.speakerWarning { return ("Connect headphones", "Nothing is played without them.") }
+        if m.selected != nil && !m.filterActive { return ("Learning the voice", "Keep them talking.") }
+        return nil
     }
 
     private var startStop: some View {
@@ -121,16 +163,107 @@ struct ContentView: View {
             withAnimation(Look.ease) { m.toggle() }
         } label: {
             ZStack {
-                Circle().fill(m.running ? Color.white.opacity(0.06) : Look.accent)
-                Circle().stroke(m.running ? Color.white.opacity(0.14) : Look.accent, lineWidth: 1)
-                Image(systemName: m.running ? "pause.fill" : "play.fill").font(.system(size: 17, weight: .semibold))
+                Circle().fill(m.running ? Color.white.opacity(0.06) : Look.orange)
+                Circle().stroke(m.running ? Color.white.opacity(0.14) : Look.orange, lineWidth: 1)
+                Image(systemName: m.running ? "pause.fill" : "play.fill").font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(m.running ? Look.text : Look.bg).offset(x: m.running ? 0 : 1)
             }
-            .frame(width: 50, height: 50)
+            .frame(width: 40, height: 40)
         }
         .buttonStyle(Press())
         .disabled(!m.modelReady).opacity(m.modelReady ? 1 : 0.4)
         .accessibilityLabel(m.running ? "Pause listening" : "Start listening")
+    }
+}
+
+/// The agent's question: who it is, a few words on what it is about, Yes or No.
+struct AgentCard: View {
+    let alert: Agent.Alert
+    let answer: (Bool) -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(alert.who).font(.system(size: 30, weight: .semibold)).tracking(-0.6).foregroundStyle(Look.orange).lineLimit(1).minimumScaleFactor(0.7)
+            Text(alert.summary.isEmpty ? "Want to hear them?" : "\(alert.summary). Hear them?").font(.system(size: 17)).foregroundStyle(Look.text).lineLimit(1).minimumScaleFactor(0.75)
+            HStack(spacing: 12) {
+                Button { answer(true) } label: {
+                    Text("Yes").font(.system(size: 18, weight: .semibold)).foregroundStyle(Color(red: 0.10, green: 0.07, blue: 0.02))
+                        .frame(maxWidth: .infinity).frame(height: 44).background(Look.orange, in: RoundedRectangle(cornerRadius: 14))
+                }
+                Button { answer(false) } label: {
+                    Text("No").font(.system(size: 18, weight: .semibold)).foregroundStyle(Look.text)
+                        .frame(maxWidth: .infinity).frame(height: 44).background(Color.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
+                }
+            }
+            .buttonStyle(Press()).padding(.top, 4)
+        }
+        .padding(.horizontal, 18).padding(.vertical, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Look.card, in: RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).stroke(Look.orange, lineWidth: 1.5))
+    }
+}
+
+/// A voice drawn as a soft shape whose edge ripples; livelier while that person talks.
+struct WavyBlob: View {
+    let colour: Color
+    let size: CGFloat
+    let level: Double
+    let seed: Double
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+            Canvas { context, canvas in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                let centre = CGPoint(x: canvas.width / 2, y: canvas.height / 2)
+                let radius = size / 2 * (1 + 0.16 * level), wobble = size * (0.055 + 0.13 * level)
+                func outline(_ r: CGFloat, _ w: CGFloat, _ shift: Double) -> Path {
+                    var path = Path()
+                    for i in 0...64 {
+                        let a = Double(i) / 64 * 2 * .pi
+                        let rr = r + CGFloat(sin(a * 3 + t * 2.1 + seed + shift)) * w + CGFloat(sin(a * 5 - t * 1.5 + seed * 0.7)) * w * 0.6
+                        let point = CGPoint(x: centre.x + CGFloat(cos(a)) * rr, y: centre.y + CGFloat(sin(a)) * rr)
+                        if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
+                    }
+                    path.closeSubpath()
+                    return path
+                }
+                context.fill(outline(radius * 1.2, wobble * 1.05, 1.3), with: .color(colour.opacity(0.10 + 0.22 * level)))
+                context.fill(outline(radius, wobble, 0), with: .radialGradient(Gradient(colors: [colour.opacity(0.98), colour.opacity(0.62)]),
+                             center: CGPoint(x: centre.x - radius * 0.3, y: centre.y - radius * 0.35), startRadius: 0, endRadius: radius * 1.5))
+                context.fill(Path(ellipseIn: CGRect(x: centre.x - radius * 0.52, y: centre.y - radius * 0.56, width: radius * 0.42, height: radius * 0.36)),
+                             with: .color(.white.opacity(0.28)))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// The line of sound from the picked voice into the brain: three strands that ripple like a waveform,
+/// pinned at both ends. Drawn behind the brain.
+struct SoundLine: View {
+    let from: CGPoint, to: CGPoint
+    let lively: Double, seed: Double
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+            Canvas { context, _ in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                let dx = to.x - from.x, dy = to.y - from.y, length = max(1, hypot(dx, dy))
+                let nx = -dy / length, ny = dx / length
+                for strand in 0..<3 {
+                    var path = Path()
+                    let k = Double(strand)
+                    for i in 0...60 {
+                        let u = Double(i) / 60
+                        let pinned = sin(u * .pi)                                   // no movement at the ends
+                        let swing = (sin(u * (9 + 3 * k) - t * (4.2 + k) + seed * 2 + k) + 0.5 * sin(u * 21 + t * 6.5 + k * 1.9)) * (4 + 9 * lively) * pinned
+                        let point = CGPoint(x: from.x + dx * u + nx * swing, y: from.y + dy * u + ny * swing)
+                        if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
+                    }
+                    context.stroke(path, with: .color(Look.orange.opacity(0.85 - 0.25 * k)), style: StrokeStyle(lineWidth: 2.4 - 0.6 * k, lineCap: .round, lineJoin: .round))
+                }
+            }
+        }
+        .allowsHitTesting(false).accessibilityHidden(true)
     }
 }
 
@@ -158,36 +291,6 @@ struct Levels: View {
                 ctx.fill(Path(roundedRect: r, cornerRadius: w / 2), with: .color((i > n - 4 ? tone : Look.text2).opacity(a)))
             }
         }
-    }
-}
-
-/// One recognised voice: lights up while that person talks, fills in when it is the one you hear.
-struct VoiceDot: View {
-    let number: Int
-    let talking: Bool
-    let chosen: Bool
-    let dimmed: Bool
-    let learning: Bool
-    @State private var breathe = false
-
-    var body: some View {
-        let d: CGFloat = talking || chosen ? 56 : 48
-        ZStack {
-            Circle().fill(chosen ? Look.accent : (talking ? Look.accent.opacity(0.16) : Color.white.opacity(0.04)))
-            Circle().stroke(chosen ? Look.accent : (talking ? Look.accent.opacity(0.7) : Look.line), lineWidth: 1)
-            Text("\(number)").font(.system(size: 18, weight: .medium, design: .monospaced))
-                .foregroundStyle(chosen ? Look.bg : (talking ? Look.accent : Look.text2))
-        }
-        .frame(width: d, height: d)
-        .frame(width: 56, height: 56)
-        .opacity(dimmed ? 0.4 : (learning ? (breathe ? 0.55 : 1) : 1))
-        .animation(Look.ease, value: talking)
-        .animation(Look.ease, value: chosen)
-        .onChange(of: learning) { _, on in
-            if on { withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { breathe = true } } else { breathe = false }
-        }
-        .contentShape(Circle())
-        .accessibilityLabel("Voice \(number)" + (talking ? ", talking" : "") + (chosen ? ", selected" : ""))
     }
 }
 

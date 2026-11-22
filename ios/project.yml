@@ -34,6 +34,9 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSMicrophoneUsageDescription: "Tether listens to the room so you can pick who to hear."
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: "Tether sends short clips of what it hears to your Mac on the same Wi-Fi, which tells it when someone says something you may want to hear."
         NSMotionUsageDescription: "Tether uses the gyroscope to know which way the phone points during the direction test."
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

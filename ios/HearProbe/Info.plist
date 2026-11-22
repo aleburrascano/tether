@@ -22,6 +22,13 @@
 	<string>1</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Tether sends short clips of what it hears to your Mac on the same Wi-Fi, which tells it when someone says something you may want to hear.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Tether listens to the room so you can pick who to hear.</string>
 	<key>NSMotionUsageDescription</key>
