@@ -3,7 +3,7 @@ import Foundation
 /// The listening agent: tells you when someone says something you may want to hear.
 ///
 /// The understanding is not done on the phone. Every few seconds the last stretch of microphone sound is
-/// sent (the last 5 s, every 2 s) to a Mac on the same Wi-Fi (`agent_service.py`), which turns the speech into text and asks an AI
+/// sent (the last 5 s, every second) to a Mac on the same Wi-Fi (`agent_service.py`), which turns the speech into text and asks an AI
 /// model whether it matters (an order or a name being called, an announcement, someone asking for you).
 /// If it does, the screen asks "want to hear them?".
 ///
@@ -13,7 +13,7 @@ import Foundation
 final class Agent: ObservableObject {
     /// The Mac running agent_service.py. Change this to the Mac's address.
     static let host = "your-mac.local:8911"
-    static let clipSec = 5.0, everySec = 2.0, showSec = 16.0
+    static let clipSec = 5.0, everySec = 1.0, showSec = 16.0
 
     struct Alert: Equatable { let who: String; let summary: String; let voice: Int? }
     @Published var alert: Alert?
