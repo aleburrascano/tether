@@ -29,7 +29,7 @@ struct ContentView: View {
     @State private var ready: Set<Int> = []          // voices heard alone for long enough to be picked
     @State private var ticks = 0
     @AppStorage("tourDone") private var tourDone = false
-    @State private var tourStep = 0                   // 0 = welcome, 1... = the walkthrough
+    @State private var tourStep = UserDefaults.standard.integer(forKey: "tourStart")   // 0 = welcome, 1... = the walkthrough (the key is only for checking screens)
     @State private var marks: [String: CGRect] = [:]
     private let tick = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
@@ -135,10 +135,10 @@ struct ContentView: View {
             let brainSide = min(geo.size.width, geo.size.height - 110)
             let brainMid = CGPoint(x: geo.size.width / 2, y: 110 + (geo.size.height - 110) / 2)
             let place = { (i: Int, id: Int) -> CGPoint in
-                CGPoint(x: geo.size.width * (CGFloat(i) + 0.5) / CGFloat(n) + Self.shift[id & 3], y: 16 + size / 2 + Self.drop[id & 3])
+                CGPoint(x: min(geo.size.width - size * 0.72, max(size * 0.72, geo.size.width * (CGFloat(i) + 0.5) / CGFloat(n) + Self.shift[id & 3])), y: 22 + size / 2 + Self.drop[id & 3])
             }
             ZStack {
-                Color.clear.frame(width: geo.size.width, height: 128).position(x: geo.size.width / 2, y: 68).tourMark("voices")
+                Color.clear.frame(width: geo.size.width, height: 128).tourMark("voices").position(x: geo.size.width / 2, y: 64).allowsHitTesting(false)
                 ForEach(Array(voices.enumerated()), id: \.element.id) { i, v in
                     if v.state == .on || v.state == .starting {
                         SoundLine(from: place(i, v.id), to: CGPoint(x: brainMid.x - brainSide * 0.04, y: brainMid.y + brainSide * 0.04),
@@ -148,11 +148,11 @@ struct ContentView: View {
                 Brain3DView(brain: brain).frame(width: brainSide, height: brainSide).position(brainMid)
                     .opacity(m.running || touring ? 1 : 0.55)
                     .accessibilityLabel("Illustration of a brain that brightens with the sound you hear")
-                Color.clear.frame(width: brainSide * 0.9, height: brainSide * 0.62).position(brainMid).tourMark("brain").allowsHitTesting(false)
+                Color.clear.frame(width: brainSide * 0.9, height: brainSide * 0.66).tourMark("brain").position(brainMid).allowsHitTesting(false)
                 ForEach(Array(voices.enumerated()), id: \.element.id) { i, v in
                     ZStack {
                         WavyBlob(colour: v.state.colour, size: size, level: v.talking ? 1 : 0, seed: Double(v.id) * 1.7)
-                            .frame(width: size * 1.7, height: size * 1.7)
+                            .frame(width: size * 2.3, height: size * 2.3)
                         Text("\(v.id + 1)").font(.system(size: 19, weight: .semibold, design: .monospaced)).foregroundStyle(v.state == .on ? Look.bg : .white)
                     }
                     .opacity(v.state == .learning ? 0.8 : 1)
@@ -256,15 +256,16 @@ struct Welcome: View {
     var body: some View {
         GeometryReader { geo in
             let panel: CGFloat = 176
-            let ear = min(geo.size.width * 0.92, (geo.size.height - panel) * 0.62)
-            let earMid = CGPoint(x: geo.size.width - ear * 0.47, y: geo.size.height - panel - ear * 0.46)
+            let ear = min(geo.size.width * 0.98, (geo.size.height - panel) * 0.60)
+            // the ear sits right of centre inside its picture (its middle is at 59% of the width): shift the picture so the ear itself is centred
+            let earMid = CGPoint(x: geo.size.width / 2 - ear * 0.088, y: geo.size.height - panel - ear * 0.46)
             ZStack(alignment: .topLeading) {
                 Color.white.ignoresSafeArea()
                 // rings of sound arriving at the ear
                 TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
                     Canvas { ctx, size in
                         let t = timeline.date.timeIntervalSinceReferenceDate
-                        let centre = CGPoint(x: earMid.x + ear * 0.10, y: earMid.y - ear * 0.12)
+                        let centre = CGPoint(x: earMid.x + ear * 0.088, y: earMid.y - ear * 0.02)
                         for k in 0..<5 {
                             let phase = (t * 0.16 + Double(k) / 5).truncatingRemainder(dividingBy: 1)
                             let r = ear * (0.50 + 1.25 * (1 - phase))                    // rings travel inwards, towards the ear
@@ -331,7 +332,9 @@ struct Tour: View {
             // the lit part: the marked place, a little bigger, kept inside the screen's side margins
             let hole = mark.offsetBy(dx: -origin.x, dy: -origin.y).insetBy(dx: -8, dy: -8)
                 .intersection(CGRect(x: 8, y: 0, width: geo.size.width - 16, height: geo.size.height))
-            let below = hole.midY < geo.size.height * 0.45
+            let safe = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?.safeAreaInsets ?? .zero
+            let roomAbove = hole.minY - safe.top, roomBelow = geo.size.height - safe.bottom - hole.maxY
+            let below = roomAbove < 200 || (hole.midY < geo.size.height * 0.45 && roomBelow >= 200)
             ZStack {
                 Canvas { ctx, size in
                     var shade = Path(CGRect(origin: .zero, size: size))
