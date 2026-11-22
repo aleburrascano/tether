@@ -12,7 +12,10 @@ enum Tuning {
     /// Clip builder: only keep clip pieces whose voiceprint matches the person
     static var clipCheck: Bool { get { b("clipCheck", true) } set { d.set(newValue, forKey: "clipCheck") } }
     /// Filter: pull out the loudest interrupter first and subtract them (2 filter passes)
-    static var subtract: Bool { get { b("subtract", true) } set { d.set(newValue, forKey: "subtract") } }
+    static var subtract: Bool { get { b("subtract2", false) } set { d.set(newValue, forKey: "subtract2") } }
+    /// Voiceprint layer over the speaker model's slots: tells similar voices on one slot apart, and
+    /// recognises a person who comes back on another slot (People.swift)
+    static var personCheck: Bool { get { b("personCheck2", false) } set { d.set(newValue, forKey: "personCheck2") } }
     /// Speaker model: v2.1 (default) or v2 (documented as better when many people talk at once). Needs a restart.
     static var modelV2: Bool { get { b("modelV2", false) } set { d.set(newValue, forKey: "modelV2") } }
 
@@ -63,6 +66,8 @@ final class Voiceprint {
 extension Tuning {
     /// Background noise + room echo removal (LocalVQE) on what you hear
     static var denoise: Bool { get { b2("denoise", true) } set { UserDefaults.standard.set(newValue, forKey: "denoise") } }
+    /// Lift the upper part of the voice (above ~2 kHz) in what the filter plays: it comes out dull otherwise
+    static var brighten: Bool { get { b2("brighten", true) } set { UserDefaults.standard.set(newValue, forKey: "brighten") } }
     /// Raise quiet / far people to a comfortable level automatically
     static var autoLevel: Bool { get { b2("autoLevel", true) } set { UserDefaults.standard.set(newValue, forKey: "autoLevel") } }
     /// Save the whole session's mic audio (16 kHz) so every layer can be re-tested offline on the Mac

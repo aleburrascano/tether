@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>HearProbe</string>
+	<string>Tether</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,10 +22,17 @@
 	<string>1</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Tether sends short clips of what it hears to your Mac on the same Wi-Fi, which tells it when someone says something you may want to hear.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>HearProbe listens to the room so you can pick who to hear.</string>
+	<string>Tether listens to the room so you can pick who to hear.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>HearProbe uses the gyroscope to know which way the phone points during the direction test.</string>
+	<string>Tether uses the gyroscope to know which way the phone points during the direction test.</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchScreen</key>

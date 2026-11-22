@@ -3,7 +3,9 @@ import SwiftUI
 
 @MainActor
 final class Model: ObservableObject {
-    struct Bubble: Identifiable { let id: Int; var seconds: Double; var talking: Bool }   // id = model slot 0...3
+    /// One voice on screen. Without the voiceprint layer id == slot (speaker-model slot 0...3); with it, id is the
+    /// person and slot is where they were last heard.
+    struct Bubble: Identifiable { let id: Int; var slot: Int; var seconds: Double; var talking: Bool }
 
     @Published var running = false
     @Published var modelStatus = "not loaded"
@@ -11,8 +13,8 @@ final class Model: ObservableObject {
     @Published var bubbles: [Bubble] = []
     @Published var selected: Int? = nil
     @Published var listening = true
-    @Published var delay: Double = 0.3
-    @Published var boost: Double = 12
+    @Published var delay: Double = 0.6          // 0.3 was too short: the speaker model's answer arrived late about half the time (choppy mute)
+    @Published var boost: Double = 4            // on top of the automatic level; +12 pushed the voice into the limiter half the time
     @Published var threshold: Double = 0.5
     @Published var route = ""
     @Published var speakerWarning = false
@@ -62,6 +64,16 @@ final class Model: ObservableObject {
     let audio = Audio()
     lazy var voices = Voices(audio: audio)
     lazy var extractor = Extractor(audio: audio, voices: voices)
+    let people = People()
+    @Published var personCheck = Tuning.personCheck
+    @Published var personText = ""
+    private var selectedSlot: Int? = nil
+    private var routeTick = 0
+    @Published var brighten = Tuning.brighten
+    func setBrighten(_ on: Bool) { brighten = on; Tuning.brighten = on; event("setting", ["brighten": on]) }
+    func setPersonCheck(_ on: Bool) { personCheck = on; Tuning.personCheck = on; event("setting", ["person_check": on]) }
+    /// The voiceprint layer decides who is on screen (needs its model loaded).
+    private var byPerson: Bool { personCheck && Voiceprint.shared.ready }
     let filterOn = true                      // the voice filter is always on
     @Published var clipScore: Double = 0
     @Published var quality: Double = -1
@@ -108,8 +120,8 @@ final class Model: ObservableObject {
     func loadModel() {
         if ProcessInfo.processInfo.arguments.contains("-uiDemo") {     // screenshot mode only: fake people, no audio
             running = true; modelReady = true; selected = 1; filterActive = true
-            bubbles = [Bubble(id: 0, seconds: 20, talking: false), Bubble(id: 1, seconds: 30, talking: true),
-                       Bubble(id: 2, seconds: 12, talking: false), Bubble(id: 3, seconds: 8, talking: true)]
+            bubbles = [Bubble(id: 0, slot: 0, seconds: 20, talking: false), Bubble(id: 1, slot: 1, seconds: 30, talking: true),
+                       Bubble(id: 2, slot: 2, seconds: 12, talking: false), Bubble(id: 3, slot: 3, seconds: 8, talking: true)]
             return
         }
         guard !modelReady else { return }
@@ -133,18 +145,21 @@ final class Model: ObservableObject {
             try audio.start()
             route = audio.routeText
             speakerWarning = audio.outputIsSpeaker
-            audio.listen = listening && !speakerWarning
-            selected = nil; bubbles = []; nextMetricFrame = 0
+            selected = nil; selectedSlot = nil; bubbles = []; nextMetricFrame = 0
+            applyListen()
+            voices.blocked = false
             voices.select(nil)
             voices.threshold = Float(threshold)
             voices.start()
             extractor.enabled = filterOn
             extractor.wantedSlot = nil
+            extractor.framesFilter = nil
             extractor.start()
+            people.start(voices: voices, extractor: extractor)
             openLog()
             event("start", ["route": route, "delay": delay, "model": Tuning.modelName, "smoothing": Tuning.smoothing,
-                            "clip_check": Tuning.clipCheck, "subtract": Tuning.subtract, "voiceprint": Voiceprint.shared.status,
-                            "denoise": Tuning.denoise, "denoiser": Denoiser.shared.status, "auto_level": Tuning.autoLevel,
+                            "person_check": Tuning.personCheck, "clip_check": Tuning.clipCheck, "subtract": Tuning.subtract, "voiceprint": Voiceprint.shared.status,
+                            "denoise": Tuning.denoise, "brighten": Tuning.brighten, "denoiser": Denoiser.shared.status, "auto_level": Tuning.autoLevel,
                             "session_file": extractor.sessionName])
             audio.onRecordingDone = { [weak self] url in
                 Task { @MainActor in
@@ -161,19 +176,31 @@ final class Model: ObservableObject {
 
     func stop() {
         timer?.invalidate(); timer = nil
-        extractor.stop(); voices.stop(); audio.stop()
+        people.stop(); extractor.stop(); voices.stop(); audio.stop()
         event("stop", [:]); try? log?.close(); log = nil
         running = false
     }
 
+    /// How many seconds of this voice talking alone the app has heard lately. The voice filter needs
+    /// `Extractor.minSoloSec` of it before it can pick that person out, so the screen uses this to show
+    /// whether a voice is ready to be picked. (Read only: nothing in the audio path depends on it.)
+    func soloSeconds(_ b: Bubble) -> Double { Double(voices.soloFrames(slot: b.slot).count) * Audio.frameSec }
+
     func tap(_ b: Bubble) {
         selected = (selected == b.id) ? nil : b.id
-        voices.select(selected)
-        extractor.wantedSlot = selected
-        event("select", ["slot": selected ?? -1])
+        selectedSlot = selected == nil ? nil : b.slot
+        voices.blocked = false
+        extractor.framesFilter = nil
+        voices.select(selectedSlot)
+        extractor.wantedSlot = selectedSlot
+        applyListen()
+        event("select", ["slot": selectedSlot ?? -1, "person": byPerson ? (selected ?? -1) : -1])
     }
 
-    func setListening(_ on: Bool) { listening = on; audio.listen = on && !speakerWarning; event("listen", ["on": on]) }
+    /// Sound is played only while a voice is picked: with nobody picked the headphones stay silent
+    /// (and never without headphones, which would feed back).
+    private func applyListen() { audio.listen = listening && !speakerWarning && selected != nil }
+    func setListening(_ on: Bool) { listening = on; applyListen(); event("listen", ["on": on]) }
     func setBoost(_ d: Double) { boost = d; audio.boostDB = Float(d); event("boost", ["db": d]) }
     func setDelay(_ d: Double) { delay = d; audio.delaySec = d; event("delay", ["sec": d]) }
     func record() {
@@ -189,14 +216,31 @@ final class Model: ObservableObject {
     private func update() {
         let s = voices.snapshot()
         var b: [Bubble] = []
-        for (i, sl) in s.slots.enumerated() where sl.speechSec >= Model.minBubbleSec || i == selected {
-            b.append(Bubble(id: i, seconds: sl.speechSec, talking: sl.talking))
+        if byPerson {
+            // one voice per person the voiceprint layer knows; lit while their slot talks and is theirs
+            for p in people.list() {
+                b.append(Bubble(id: p.id, slot: p.slot, seconds: s.slots[p.slot].speechSec, talking: p.mine && s.slots[p.slot].talking))
+            }
+            if let sel = selected, let me = b.first(where: { $0.id == sel }) {
+                if me.slot != selectedSlot {                    // our person moved to another slot: follow them
+                    selectedSlot = me.slot; voices.select(me.slot); extractor.wantedSlot = me.slot
+                    event("select_follow", ["slot": me.slot, "person": sel])
+                }
+            }
+            personText = people.text
+            for e in people.drainEvents() { write(e.merging(["t": (Date().timeIntervalSince(t0) * 1000).rounded() / 1000]) { a, _ in a }) }
+        } else {
+            for (i, sl) in s.slots.enumerated() where sl.speechSec >= Model.minBubbleSec || i == selected {
+                b.append(Bubble(id: i, slot: i, seconds: sl.speechSec, talking: sl.talking))
+            }
         }
         bubbles = b
         latest = s.latest; latestFinal = s.latestIsFinal; recent = s.recent
+        routeTick += 1
+        if routeTick % 10 == 0 { audio.refreshRoute() }       // ask every second: a missed system notice must not leave the sound off
         if speakerWarning != audio.outputIsSpeaker {          // headphones connected / removed mid-session
             speakerWarning = audio.outputIsSpeaker
-            audio.listen = listening && !speakerWarning
+            applyListen()
             event("route", ["headphones": !speakerWarning, "output": audio.outputName])
         }
         for e in extractor.drainEvents() { write(e.merging(["t": (Date().timeIntervalSince(t0) * 1000).rounded() / 1000]) { a, _ in a }) }
@@ -224,7 +268,7 @@ final class Model: ObservableObject {
         for f in max(nextMetricFrame, upTo - 200)...upTo {
             guard let p = voices.finalPred(f), let lv = extractor.levels(frame: f) else { continue }
             var d: [String: Any] = ["type": "f80", "f": f, "p": p.map { ($0 * 100).rounded() / 100 },
-                                    "in": r(lv.inDB), "sel": selected ?? -1, "boost": boost]
+                                    "in": r(lv.inDB), "sel": selectedSlot ?? -1, "boost": boost]
             if let o = lv.outDB { d["out"] = r(o) }
             if let g = audio.gateValue(frame: f) { d["gate"] = Double(g) }
             write(d)
@@ -247,11 +291,11 @@ final class Model: ObservableObject {
         write(["type": "frame", "t": r(Date().timeIntervalSince(t0)),
                "p": latest.map { r(Double($0)) }, "p_final": latestFinal,
                "speech_sec": slots.map { r($0.speechSec) }, "talking": slots.map { $0.talking },
-               "bubbles": bubbles.map { $0.id }, "selected": selected ?? -1,
+               "bubbles": bubbles.map { $0.id }, "selected": selectedSlot ?? -1, "person": byPerson ? (selected ?? -1) : -1, "slot_people": people.slotsNow,
                "gain": r(Double(gainNow)), "listen": listening, "delay": delay, "boost": boost, "out_peak": r(Double(audio.outPeak)), "threshold": threshold,
                "buffered": r(buffered), "underruns": underruns, "level_db": r(Double(level)),
                "filter_on": filterOn, "filter_active": filterActive, "solo_sec": r(soloSec), "filter_ms": r(filterMs),
-               "filter_coverage": r(filterCoverage), "filter_load": r(filterLoad), "auto_gain_db": r(autoGainDB), "denoise_ms": r(Denoiser.shared.lastMs), "subtracting": subtracting ?? -1, "filter_refreshes": filterRefreshes,
+               "filter_skips": extractor.skips, "filter_coverage": r(filterCoverage), "filter_load": r(filterLoad), "auto_gain_db": r(autoGainDB), "denoise_ms": r(Denoiser.shared.lastMs), "subtracting": subtracting ?? -1, "filter_refreshes": filterRefreshes,
                "proc_ms": r(procMs), "model_lag": r(modelLag), "errors": voices.errors])
     }
 
