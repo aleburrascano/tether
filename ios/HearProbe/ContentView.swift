@@ -14,7 +14,9 @@ enum Look {
     static let orange = Color(red: 1.0, green: 0.624, blue: 0.039)      // the agent
     static let green = Color(red: 0.20, green: 0.84, blue: 0.45)        // the voice you hear
     static let red = Color(red: 0.93, green: 0.33, blue: 0.31)          // a voice the app is still learning
-    static let plum = Color(red: 0.290, green: 0.184, blue: 0.322)      // the mascot's background
+    static let coral = Color(red: 0.910, green: 0.471, blue: 0.353)     // the mascot's colour: welcome and walkthrough
+    static let peach = Color(red: 1.0, green: 0.847, blue: 0.773)
+    static let ink = Color(red: 0.17, green: 0.11, blue: 0.19)          // dark plum, for text on white
     static let ease = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.32)
 }
 
@@ -40,7 +42,7 @@ struct ContentView: View {
         ZStack {
             Look.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                topBar.frame(height: 44)
+                topBar.frame(height: 44).opacity(touring ? 0 : 1)        // no buttons while the walkthrough runs
                 stage.frame(maxHeight: .infinity)
                 bottom.frame(height: 150).tourMark("bars")
             }
@@ -53,9 +55,8 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
-        .coordinateSpace(name: "screen")
         .onPreferenceChange(TourMarks.self) { marks = $0 }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(!tourDone && tourStep == 0 ? .light : .dark)
         .onAppear { m.loadModel() }
         .onChange(of: tourDone) { _, done in if !done { tourStep = 0 } }
         .onReceive(tick) { _ in
@@ -101,7 +102,7 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("Mark this moment")
             }
-            startStop.tourMark("play")
+            startStop
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape").font(.system(size: 20)).foregroundStyle(Look.text2).frame(width: 40, height: 44, alignment: .trailing)
             }
@@ -137,7 +138,7 @@ struct ContentView: View {
                 CGPoint(x: geo.size.width * (CGFloat(i) + 0.5) / CGFloat(n) + Self.shift[id & 3], y: 16 + size / 2 + Self.drop[id & 3])
             }
             ZStack {
-                Color.clear.frame(width: geo.size.width, height: 112).position(x: geo.size.width / 2, y: 56).tourMark("voices")
+                Color.clear.frame(width: geo.size.width, height: 128).position(x: geo.size.width / 2, y: 68).tourMark("voices")
                 ForEach(Array(voices.enumerated()), id: \.element.id) { i, v in
                     if v.state == .on || v.state == .starting {
                         SoundLine(from: place(i, v.id), to: CGPoint(x: brainMid.x - brainSide * 0.04, y: brainMid.y + brainSide * 0.04),
@@ -179,14 +180,14 @@ struct ContentView: View {
     /// is written over them in a few big words; the agent's question sits on top of everything.
     private var bottom: some View {
         ZStack {
-            Levels(history: history, tone: touring ? Look.green : tone).padding(.vertical, 6).opacity(touring ? 1 : (m.running ? (notice == nil ? 1 : 0.25) : 0.3))
+            Levels(history: history, tone: touring ? Look.text2 : tone).padding(.vertical, 6).opacity(touring ? 1 : (m.running ? (notice == nil ? 1 : 0.25) : 0.3))
             if let notice, agent.alert == nil, !touring {
                 VStack(spacing: 4) {
                     Text(notice.0).font(.system(size: 28, weight: .semibold)).tracking(-0.5).foregroundStyle(m.speakerWarning && m.running ? Look.orange : Look.text)
                     if !notice.1.isEmpty { Text(notice.1).font(.system(size: 15)).foregroundStyle(Look.text2).multilineTextAlignment(.center).lineLimit(2) }
                 }
             }
-            if touring && tourStep == 4 {
+            if touring && tourStep >= 4 {
                 AgentCard(alert: Agent.Alert(who: "Barista", summary: "Order 42 is ready", voice: nil)) { _ in }.allowsHitTesting(false)
             }
             if let a = agent.alert, m.running, !touring {
@@ -243,40 +244,71 @@ struct TourMarks: PreferenceKey {
 }
 extension View {
     func tourMark(_ name: String) -> some View {
-        background(GeometryReader { g in Color.clear.preference(key: TourMarks.self, value: [name: g.frame(in: .named("screen"))]) })
+        background(GeometryReader { g in Color.clear.preference(key: TourMarks.self, value: [name: g.frame(in: .global)]) })
     }
 }
 
-/// The first thing you see: the mascot and one button.
+/// The first thing you see. White page: the name up top, rings of sound spreading across it, and the
+/// mascot peeking up from behind the panel that holds the one button.
 struct Welcome: View {
     let start: () -> Void, skip: () -> Void
     @State private var up = false
     var body: some View {
-        ZStack {
-            Look.bg.ignoresSafeArea()
-            VStack(spacing: 0) {
-                Spacer()
-                Image("Mascot").resizable().scaledToFit().frame(width: 210, height: 210)
-                    .clipShape(RoundedRectangle(cornerRadius: 48, style: .continuous))
-                    .offset(y: up ? -6 : 6)
-                    .accessibilityLabel("Tether's mascot, a smiling ear")
-                Text("Tether").font(.system(size: 44, weight: .bold)).tracking(-1).foregroundStyle(Look.text).padding(.top, 30)
-                Text("Hear who you want.").font(.system(size: 20)).foregroundStyle(Look.text2).padding(.top, 4)
-                Spacer()
-                Button(action: start) {
-                    Text("Show me how").font(.system(size: 19, weight: .semibold)).foregroundStyle(Look.bg)
-                        .frame(maxWidth: .infinity).frame(height: 56).background(Look.green, in: RoundedRectangle(cornerRadius: 18))
+        GeometryReader { geo in
+            let panel: CGFloat = 176
+            let ear = min(geo.size.width * 0.92, (geo.size.height - panel) * 0.62)
+            let earMid = CGPoint(x: geo.size.width - ear * 0.47, y: geo.size.height - panel - ear * 0.46)
+            ZStack(alignment: .topLeading) {
+                Color.white.ignoresSafeArea()
+                // rings of sound arriving at the ear
+                TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+                    Canvas { ctx, size in
+                        let t = timeline.date.timeIntervalSinceReferenceDate
+                        let centre = CGPoint(x: earMid.x + ear * 0.10, y: earMid.y - ear * 0.12)
+                        for k in 0..<5 {
+                            let phase = (t * 0.16 + Double(k) / 5).truncatingRemainder(dividingBy: 1)
+                            let r = ear * (0.50 + 1.25 * (1 - phase))                    // rings travel inwards, towards the ear
+                            ctx.stroke(Path(ellipseIn: CGRect(x: centre.x - r, y: centre.y - r, width: 2 * r, height: 2 * r)),
+                                       with: .color(Look.peach.opacity(0.85 * sin(phase * .pi))), lineWidth: 10)
+                        }
+                    }
                 }
-                .buttonStyle(Press())
-                Button(action: skip) { Text("Skip").font(.system(size: 17, weight: .medium)).foregroundStyle(Look.text2).frame(height: 48) }
+                .ignoresSafeArea().accessibilityHidden(true)
+
+                Image("MascotCut").resizable().scaledToFit().frame(width: ear, height: ear)
+                    .position(x: earMid.x, y: earMid.y + ear * 0.04 + (up ? -5 : 5))
+                    .accessibilityLabel("Tether's mascot, a smiling ear")
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Tether").font(.system(size: 56, weight: .heavy, design: .rounded)).tracking(-1.5).foregroundStyle(Look.ink)
+                    Text("Hear who\nyou want.").font(.system(size: 30, weight: .semibold, design: .rounded)).tracking(-0.5).foregroundStyle(Look.coral)
+                        .lineSpacing(-2)
+                }
+                .padding(.horizontal, 28).padding(.top, 28)
+
+                // the panel the mascot peeks over
+                VStack(spacing: 4) {
+                    Button(action: start) {
+                        Text("Show me how").font(.system(size: 19, weight: .semibold, design: .rounded)).foregroundStyle(.white)
+                            .frame(maxWidth: .infinity).frame(height: 58).background(Look.coral, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    }
+                    .buttonStyle(Press())
+                    Button(action: skip) {
+                        Text("Skip").font(.system(size: 17, weight: .medium, design: .rounded)).foregroundStyle(.white.opacity(0.7)).frame(maxWidth: .infinity).frame(height: 48)
+                    }
+                }
+                .padding(.horizontal, 24).padding(.top, 28)
+                .frame(width: geo.size.width, height: panel, alignment: .top)
+                .background(Look.ink.clipShape(UnevenRoundedRectangle(topLeadingRadius: 34, topTrailingRadius: 34, style: .continuous)).ignoresSafeArea(edges: .bottom))
+                .position(x: geo.size.width / 2, y: geo.size.height - panel / 2)
             }
-            .padding(.horizontal, 24).padding(.bottom, 12)
         }
-        .onAppear { withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { up = true } }
+        .onAppear { withAnimation(.easeInOut(duration: 1.7).repeatForever(autoreverses: true)) { up = true } }
     }
 }
 
 /// The walkthrough: the screen dims, one part stays lit, and the mascot says what it is.
+/// Drawn over the whole screen (under the notch too); places are in screen coordinates.
 struct Tour: View {
     @Binding var step: Int
     let marks: [String: CGRect]
@@ -287,7 +319,6 @@ struct Tour: View {
         ("brain", "This lights up", "The more sound reaches you, the brighter it gets. It is a picture, not a brain scan."),
         ("bars", "The room's sound", "Big bars mean a loud room."),
         ("bars", "I'll tell you", "If someone calls you, I ask if you want to hear them."),
-        ("play", "Press play", "Put your headphones in first."),
     ]
 
     var body: some View {
@@ -295,38 +326,41 @@ struct Tour: View {
         let s = Tour.steps[i]
         let last = i == Tour.steps.count - 1
         GeometryReader { geo in
-            let hole = (marks[s.mark] ?? CGRect(x: 20, y: geo.size.height / 3, width: geo.size.width - 40, height: 120)).insetBy(dx: -8, dy: -8)
+            let origin = geo.frame(in: .global).origin
+            let mark = marks[s.mark] ?? CGRect(x: 20, y: geo.size.height / 3, width: geo.size.width - 40, height: 120)
+            // the lit part: the marked place, a little bigger, kept inside the screen's side margins
+            let hole = mark.offsetBy(dx: -origin.x, dy: -origin.y).insetBy(dx: -8, dy: -8)
+                .intersection(CGRect(x: 8, y: 0, width: geo.size.width - 16, height: geo.size.height))
             let below = hole.midY < geo.size.height * 0.45
-            ZStack(alignment: .topLeading) {
-                // dim everything except the part being explained
+            ZStack {
                 Canvas { ctx, size in
                     var shade = Path(CGRect(origin: .zero, size: size))
-                    shade.addRoundedRect(in: hole, cornerSize: CGSize(width: 22, height: 22))
-                    ctx.fill(shade, with: .color(.black.opacity(0.78)), style: FillStyle(eoFill: true))
-                    ctx.stroke(Path(roundedRect: hole, cornerRadius: 22), with: .color(Look.green.opacity(0.9)), lineWidth: 2)
+                    shade.addRoundedRect(in: hole, cornerSize: CGSize(width: 24, height: 24), style: .continuous)
+                    ctx.fill(shade, with: .color(.black.opacity(0.8)), style: FillStyle(eoFill: true))
+                    ctx.stroke(Path(roundedRect: hole.insetBy(dx: 1, dy: 1), cornerRadius: 23, style: .continuous), with: .color(Look.coral), lineWidth: 2)
                 }
-                .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture { next(last) }
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top, spacing: 14) {
-                        Image("Mascot").resizable().scaledToFit().frame(width: 58, height: 58).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        Image("Mascot").resizable().scaledToFit().frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(s.title).font(.system(size: 24, weight: .semibold)).tracking(-0.4).foregroundStyle(Look.text)
+                            Text(s.title).font(.system(size: 24, weight: .semibold, design: .rounded)).tracking(-0.4).foregroundStyle(Look.text)
                             Text(s.text).font(.system(size: 17)).foregroundStyle(Look.text2).fixedSize(horizontal: false, vertical: true)
                         }
+                        Spacer(minLength: 0)
                     }
                     HStack(spacing: 6) {
                         ForEach(0..<Tour.steps.count, id: \.self) { k in
-                            Capsule().fill(k == i ? Look.green : Color.white.opacity(0.2)).frame(width: k == i ? 18 : 6, height: 6)
+                            Capsule().fill(k == i ? Look.coral : Color.white.opacity(0.2)).frame(width: k == i ? 18 : 6, height: 6)
                         }
                         Spacer()
-                        if !last { Button("Skip") { done() }.font(.system(size: 16, weight: .medium)).foregroundStyle(Look.text2).frame(height: 44).padding(.trailing, 6) }
+                        if !last { Button("Skip") { done() }.font(.system(size: 16, weight: .medium)).foregroundStyle(Look.text2).frame(height: 44).padding(.trailing, 8) }
                         Button { next(last) } label: {
-                            Text(last ? "Got it" : "Next").font(.system(size: 17, weight: .semibold)).foregroundStyle(Look.bg)
-                                .padding(.horizontal, 22).frame(height: 44).background(Look.green, in: Capsule())
+                            Text(last ? "Got it" : "Next").font(.system(size: 17, weight: .semibold, design: .rounded)).foregroundStyle(.white)
+                                .padding(.horizontal, 24).frame(height: 44).background(Look.coral, in: Capsule())
                         }
                         .buttonStyle(Press())
                     }
@@ -335,11 +369,13 @@ struct Tour: View {
                 .background(Look.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Look.line, lineWidth: 1))
                 .padding(.horizontal, 16)
-                .frame(width: geo.size.width)
-                .position(x: geo.size.width / 2, y: below ? min(geo.size.height - 110, hole.maxY + 100) : max(110, hole.minY - 100))
+                // exactly 14 points from the lit part, on whichever side has room
+                .padding(below ? .top : .bottom, below ? hole.maxY + 14 : geo.size.height - hole.minY + 14)
+                .frame(width: geo.size.width, height: geo.size.height, alignment: below ? .top : .bottom)
                 .id(i).transition(.opacity)
             }
         }
+        .ignoresSafeArea()
         .accessibilityElement(children: .contain)
     }
 
