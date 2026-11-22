@@ -267,6 +267,12 @@ final class Extractor {
 
     /// Start / stop / refresh, on the worker thread. Slow work goes to the side queue.
     private func control() {
+        // The noise-removal switch applies at once: restart the filtered stream with the new choice (a moment of
+        // unfiltered sound while it restarts, the same as picking the voice again).
+        if active, slot != nil, denoising != (Tuning.denoise && Denoiser.shared.ready) {
+            log("denoise_switch", ["on": !denoising])
+            slot = nil
+        }
         let want = enabled ? wantedSlot : nil
         if want != slot {
             slot = want; active = false; soloSec = 0; lastClipFrames = []; lastTry = 0; quality = -1; centroid = nil

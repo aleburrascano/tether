@@ -13,8 +13,8 @@ final class Model: ObservableObject {
     @Published var bubbles: [Bubble] = []
     @Published var selected: Int? = nil
     @Published var listening = true
-    @Published var delay: Double = 0.3
-    @Published var boost: Double = 12
+    @Published var delay: Double = 0.6          // 0.3 was too short: the speaker model's answer arrived late about half the time (choppy mute)
+    @Published var boost: Double = 4            // on top of the automatic level; +12 pushed the voice into the limiter half the time
     @Published var threshold: Double = 0.5
     @Published var route = ""
     @Published var speakerWarning = false
