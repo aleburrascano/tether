@@ -1,0 +1,22 @@
+# --- private: recordings of real people (never commit) ---
+phone_logs/
+testdata/
+ios/bench_kit/*.f32
+*.wav
+*.jsonl
+
+# --- large / downloadable / licence unclear ---
+models/
+models_cache/
+ios/HearProbe/Models/*.onnx
+ios/bench_kit/*.onnx
+vendor/ort/
+
+# --- generated ---
+.venv/
+__pycache__/
+ios/build*/
+ios/*.xcodeproj/
+tools/vpcal/.build/
+.DS_Store
+xcuserdata/
