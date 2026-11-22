@@ -58,7 +58,7 @@ struct ContentView: View {
     private var topBar: some View {
         HStack(spacing: 8) {
             Circle().fill(tone).frame(width: 8, height: 8)
-            Text(!m.modelReady ? "Loading" : (!m.running ? "Paused" : (m.speakerWarning ? "No headphones" : "Listening")))
+            Text(!m.modelReady ? "Loading" : (!m.running ? "Paused" : (m.speakerWarning ? "No headphones" : "Playing to \(m.audio.outputName)")))
                 .font(.system(size: 14, weight: .medium)).foregroundStyle(Look.text2)
             Spacer()
             if m.running {

@@ -230,6 +230,7 @@ final class Model: ObservableObject {
         }
         bubbles = b
         latest = s.latest; latestFinal = s.latestIsFinal; recent = s.recent
+        audio.refreshRoute()                                  // ask every time: a missed system notice must not leave the sound off
         if speakerWarning != audio.outputIsSpeaker {          // headphones connected / removed mid-session
             speakerWarning = audio.outputIsSpeaker
             audio.listen = listening && !speakerWarning
