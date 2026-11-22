@@ -198,7 +198,8 @@ struct ContentView: View {
             if touring && tourStep >= 4 {
                 AgentCard(alert: Agent.Alert(who: "Barista", summary: "Order 42 is ready", voice: nil)) { _ in }.allowsHitTesting(false)
             }
-            if let a = agent.alert, m.running, !touring {
+            // the question is only asked about a voice you can actually pick (grey), never a red one
+            if let a = agent.alert, m.running, !touring, let av = a.voice, ready.contains(av), m.selected != av {
                 AgentCard(alert: a) { yes in
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     if yes, let v = a.voice, m.selected != v, ready.contains(v), let b = m.bubbles.first(where: { $0.id == v }) { m.tap(b) }

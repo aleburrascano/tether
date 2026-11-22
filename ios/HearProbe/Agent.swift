@@ -103,6 +103,8 @@ final class Agent: ObservableObject {
         guard reply["alert"] as? Bool == true else { return (nil, names) }
         let who = (reply["role"] as? String ?? "").trimmingCharacters(in: .whitespaces)
         let words = ((reply["summary"] as? String) ?? (reply["quote"] as? String) ?? "").split(separator: " ").prefix(6).joined(separator: " ")
-        return ((who.isEmpty ? "Someone" : who, words), names)
+        // only a real role is shown ("Barista"); with none, use that voice's own name if it has one, else say nothing
+        let name = who.isEmpty ? (voice.flatMap { names[$0] } ?? "") : who
+        return (name.isEmpty ? nil : (name, words), names)
     }
 }
