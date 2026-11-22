@@ -39,14 +39,7 @@ Tether changes what reaches your ears. Put the phone on the table and your headp
 
 There is no setup, no voice sample to record first, and no cloud. Every model runs on the phone.
 
-**Made for**
-
-| | |
-|---|---|
-| **Sensory overload** | Keep the room quiet and let one trusted voice through. |
-| **Classrooms** | Follow the teacher over a restless room. |
-| **Cafés and counters** | Hear the barista, not the grinder and the queue. |
-| **Loud tables** | Stay with the one friend you are talking to. |
+Made for people with sensory overload, students following a teacher, and anyone trying to hear one person in a café or at a loud table.
 
 ## How it works
 
@@ -65,26 +58,14 @@ The layer-by-layer breakdown, with measurements, is in **[docs/ARCHITECTURE.md](
 | | |
 |---|---|
 | **Automatic voice discovery** | Each person appears on screen a couple of seconds after they start talking. |
-| **One-tap isolation** | Tap a voice to hear that person; tap again to let go. |
-| **Works through overlap** | The voice filter keeps your person audible while others talk over them. |
-| **Noise and echo removal** | A dedicated clean-up model runs on everything you hear. |
-| **Automatic loudness** | Quiet and distant voices are raised to a comfortable level. |
-| **Listening agent** | Optional. Follows the conversation, names each voice from what they say ("Barista", "Teacher") and raises a card when something is said that you should not miss. |
-| **Clear voice states** | Voices change colour as the app learns them: learning, ready to pick, on. |
-| **Guided first run** | A short walkthrough explains the screen. |
-| **Built-in measurement** | Every session writes a log and a recording to the phone, with tools to analyse them. |
+| **One-tap isolation** | Tap a voice to hear that person, even while others talk over them. |
+| **Noise and echo removal** | A dedicated clean-up model runs on what you hear, and quiet voices are raised. |
+| **Listening agent** | Optional. Names each voice from what they say ("Barista", "Teacher") and flags what you should not miss. |
+| **Built-in measurement** | Every session is logged on the phone, with tools to analyse it. |
 
 ## Performance
 
-Measured from the app's own session logs on an iPhone 13 Pro.
-
-| Metric | Result |
-|---|---|
-| Voice filter and clean-up | **25 ms** per 40 ms of sound (faster than real time) |
-| Who-is-talking updates | **12 per second** |
-| Other speakers muted while talking alone | **94%** of the time |
-| Models running together on the phone | **4** |
-| Audio sent to a server for isolation | **None** |
+On an iPhone 13 Pro, from the app's own session logs: the voice filter and clean-up take **25 ms per 40 ms of sound**, who-is-talking updates arrive **12 times a second**, and other speakers talking alone were muted **94%** of the time. No audio is sent to a server for isolation.
 
 ## Tech stack
 
@@ -119,21 +100,7 @@ open HearProbe.xcodeproj
 
 Select your phone, press Run, and put your headphones in. The first launch downloads the on-device models (about 290 MB).
 
-The listening agent is optional. It runs as a small service on a Mac on the same network; set its address in `ios/HearProbe/Agent.swift`. Without it, the app works the same and voices are numbered.
-
-## Project structure
-
-```
-ios/HearProbe/     the app
-  Audio.swift        microphone in, delay line, mute gate, headphones out
-  Voices.swift       who is talking, and the mute decisions
-  Extractor.swift    clip builder, voice filter, clean-up
-  Agent.swift        listening agent client
-  ContentView.swift  main screen, walkthrough, settings
-docs/              architecture notes and the diagram
-tools/             session reports, mute replay, voiceprint calibration
-scripts/           dependency setup
-```
+The listening agent is optional: it runs as a small service on a Mac on the same network (address in `ios/HearProbe/Agent.swift`). Recordings and logs stay on your phone.
 
 ## Roadmap
 
@@ -141,10 +108,6 @@ scripts/           dependency setup
 - **More than four voices**, and separating people who sound alike.
 - **An on-device listening agent**, so nothing leaves the phone at all.
 - **Shadow mode**: stay in silence until a trusted person says your name, then let only their voice through.
-
-## Privacy
-
-Tether listens to the room it is in. Recordings and logs stay on your phone and are never part of this repository.
 
 ## Acknowledgements
 
