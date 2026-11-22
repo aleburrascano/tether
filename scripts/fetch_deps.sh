@@ -25,4 +25,4 @@ done
 
 # 4) Generate the Xcode project
 command -v xcodegen >/dev/null || { echo "install xcodegen: brew install xcodegen"; exit 1; }
-cd ios && xcodegen generate
+cd ios && xcodegen generate   # set DEVELOPMENT_TEAM=<your Apple team id> first
