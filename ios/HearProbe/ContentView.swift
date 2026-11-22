@@ -111,18 +111,23 @@ struct ContentView: View {
     }
 
     /// One voice as the screen shows it.
-    private struct Shown: Identifiable { let id: Int; let talking: Bool; let state: VoiceState; let bubble: Model.Bubble? }
+    private struct Shown: Identifiable { let id: Int; let talking: Bool; let state: VoiceState; let bubble: Model.Bubble?; var name = "" }
 
     /// Red: the app has not heard enough of this voice alone yet, so it cannot be picked.
     /// Grey: ready, tap it. Green: this is who you hear.
     private var shown: [Shown] {
         if touring {
-            return [Shown(id: 0, talking: true, state: .on, bubble: nil), Shown(id: 1, talking: false, state: .ready, bubble: nil),
-                    Shown(id: 2, talking: true, state: .learning, bubble: nil)]
+            return [Shown(id: 0, talking: true, state: .on, bubble: nil, name: "Friend"), Shown(id: 1, talking: false, state: .ready, bubble: nil, name: "Barista"),
+                    Shown(id: 2, talking: true, state: .learning, bubble: nil, name: "Speaker 3")]
         }
         return m.bubbles.map { b in
             let state: VoiceState = m.selected == b.id ? (m.filterActive ? .on : .starting) : (ready.contains(b.id) ? .ready : .learning)
-            return Shown(id: b.id, talking: b.talking, state: state, bubble: b)
+            // "Speaker 2" until the agent works out who they are; two voices with the same name keep their number
+            var name = "Speaker \(b.id + 1)"
+            if let label = agent.labels[b.id] {
+                name = m.bubbles.contains { $0.id != b.id && agent.labels[$0.id] == label } ? "\(label) \(b.id + 1)" : label
+            }
+            return Shown(id: b.id, talking: b.talking, state: state, bubble: b, name: name)
         }
     }
 
@@ -132,13 +137,13 @@ struct ContentView: View {
             let voices = shown
             let n = max(1, voices.count)
             let size: CGFloat = n <= 3 ? 62 : 54
-            let brainSide = min(geo.size.width, geo.size.height - 110)
-            let brainMid = CGPoint(x: geo.size.width / 2, y: 110 + (geo.size.height - 110) / 2)
+            let brainSide = min(geo.size.width, geo.size.height - 138)
+            let brainMid = CGPoint(x: geo.size.width / 2, y: 138 + (geo.size.height - 138) / 2)
             let place = { (i: Int, id: Int) -> CGPoint in
                 CGPoint(x: min(geo.size.width - size * 0.72, max(size * 0.72, geo.size.width * (CGFloat(i) + 0.5) / CGFloat(n) + Self.shift[id & 3])), y: 22 + size / 2 + Self.drop[id & 3])
             }
             ZStack {
-                Color.clear.frame(width: geo.size.width, height: 128).tourMark("voices").position(x: geo.size.width / 2, y: 64).allowsHitTesting(false)
+                Color.clear.frame(width: geo.size.width, height: 150).tourMark("voices").position(x: geo.size.width / 2, y: 75).allowsHitTesting(false)
                 ForEach(Array(voices.enumerated()), id: \.element.id) { i, v in
                     if v.state == .on || v.state == .starting {
                         SoundLine(from: place(i, v.id), to: CGPoint(x: brainMid.x - brainSide * 0.04, y: brainMid.y + brainSide * 0.04),
@@ -153,8 +158,11 @@ struct ContentView: View {
                     ZStack {
                         WavyBlob(colour: v.state.colour, size: size, level: v.talking ? 1 : 0, seed: Double(v.id) * 1.7)
                             .frame(width: size * 2.3, height: size * 2.3)
-                        Text("\(v.id + 1)").font(.system(size: 19, weight: .semibold, design: .monospaced)).foregroundStyle(v.state == .on ? Look.bg : .white)
+                        Text(v.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(v.state == .on ? Look.green : Look.text)
+                            .lineLimit(1).fixedSize().offset(y: size / 2 + 22)
+                            .id(v.name).transition(.opacity)
                     }
+                    .animation(Look.ease, value: v.name)
                     .opacity(v.state == .learning ? 0.8 : 1)
                     .contentShape(Circle())
                     .onTapGesture {
@@ -168,7 +176,7 @@ struct ContentView: View {
                     }
                     .position(place(i, v.id))
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
-                    .accessibilityLabel("Voice \(v.id + 1), \(v.state.spoken)" + (v.talking ? ", talking" : ""))
+                    .accessibilityLabel("\(v.name), \(v.state.spoken)" + (v.talking ? ", talking" : ""))
                     .accessibilityAddTraits(v.state == .learning ? [] : .isButton)
                 }
             }

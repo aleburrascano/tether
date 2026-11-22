@@ -17,6 +17,9 @@ final class Agent: ObservableObject {
 
     struct Alert: Equatable { let who: String; let summary: String; let voice: Int? }
     @Published var alert: Alert?
+    /// What the Mac worked out each voice is, from what they say ("Barista", "Judge", "Friend"). Empty until it knows.
+    @Published var labels: [Int: String] = [:]
+    private var recent: [[Int]] = []                 // who was talking in each of the last 50 ticks (5 s)
 
     private var talk: [Int: Int] = [:], lastTalker: Int?
     private var sinceAsk = 0.0, shown = 0.0, busy = false, asked = 0
@@ -26,7 +29,8 @@ final class Agent: ObservableObject {
 
     /// Call ten times a second while the screen is up.
     func tick(_ m: Model) {
-        guard m.running else { talk = [:]; return }
+        guard m.running else { talk = [:]; recent = []; if !labels.isEmpty { labels = [:] }; asked = 0; return }
+        recent.append(m.bubbles.filter { $0.talking }.map { $0.id }); if recent.count > 50 { recent.removeFirst() }
         for b in m.bubbles where b.talking { talk[b.id, default: 0] += 1; lastTalker = b.id }
         if alert != nil { shown += 0.1; if shown > Agent.showSec { alert = nil } }
         sinceAsk += 0.1
@@ -35,13 +39,20 @@ final class Agent: ObservableObject {
         let sr = m.audio.sampleRate, end = m.audio.wIdx, want = Int(Agent.clipSec * sr)
         guard end > Int(3 * sr), m.level > -55 else { talk = [:]; return }          // too little sound to be worth asking about
         let clip = Agent.to16k(m.audio.read(from: max(0, end - want), to: end), rate: sr)
-        let voice = talk.max { $0.value < $1.value }.flatMap { $0.value >= 10 ? $0.key : nil } ?? lastTalker
+        // whose clip is this? the voice that did most of the talking in it, if it was clearly one person
+        var count: [Int: Int] = [:]
+        for ids in recent { for id in ids { count[id, default: 0] += 1 } }
+        let top = count.max { $0.value < $1.value }
+        let total = count.values.reduce(0, +)
+        let solo: Int? = top.flatMap { $0.value >= 15 && Double($0.value) >= 0.7 * Double(total) ? $0.key : nil }
+        let voice = solo ?? top?.key ?? lastTalker
         talk = [:]
         busy = true
         let fresh = asked == 0; asked += 1
         Task {
-            let found = await Agent.ask(clip, fresh: fresh)
+            let (found, names) = await Agent.ask(clip, fresh: fresh, voice: solo)
             busy = false
+            if let names, names != labels { labels = names }
             if let found, !(voice != nil && m.selected == voice) {                  // already listening to them: no need to ask
                 let again = found.1 == lastSaid && Date().timeIntervalSince(lastSaidAt) < 20
                 if !again, alert == nil { alert = Alert(who: found.0, summary: found.1, voice: voice); shown = 0 }
@@ -76,16 +87,20 @@ final class Agent: ObservableObject {
         return d
     }
 
-    /// (who, a few words on what it is about), or nil when nothing is worth hearing or the Mac did not answer.
-    nonisolated static func ask(_ clip: [Float], fresh: Bool) async -> (String, String)? {
-        guard let url = URL(string: "http://\(host)/hear?fresh=\(fresh ? 1 : 0)") else { return nil }
+    /// What the Mac found: (who, a few words) if it is worth hearing, and its names for the voices so far.
+    /// Both nil when the Mac did not answer.
+    nonisolated static func ask(_ clip: [Float], fresh: Bool, voice: Int?) async -> ((String, String)?, [Int: String]?) {
+        guard let url = URL(string: "http://\(host)/hear?fresh=\(fresh ? 1 : 0)&voice=\(voice ?? -1)") else { return (nil, nil) }
         var request = URLRequest(url: url, timeoutInterval: 12)
         request.httpMethod = "POST"
         request.setValue("audio/wav", forHTTPHeaderField: "Content-Type")
         guard let (data, _) = try? await URLSession.shared.upload(for: request, from: wav(clip)),
-              let reply = try? JSONSerialization.jsonObject(with: data) as? [String: Any], reply["alert"] as? Bool == true else { return nil }
+              let reply = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return (nil, nil) }
+        var names: [Int: String] = [:]
+        for (k, v) in (reply["labels"] as? [String: String]) ?? [:] { if let id = Int(k) { names[id] = String(v.prefix(18)) } }
+        guard reply["alert"] as? Bool == true else { return (nil, names) }
         let who = (reply["role"] as? String ?? "").trimmingCharacters(in: .whitespaces)
         let words = ((reply["summary"] as? String) ?? (reply["quote"] as? String) ?? "").split(separator: " ").prefix(6).joined(separator: " ")
-        return (who.isEmpty ? "Someone" : who, words)
+        return ((who.isEmpty ? "Someone" : who, words), names)
     }
 }
