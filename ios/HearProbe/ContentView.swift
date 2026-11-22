@@ -256,28 +256,28 @@ struct Welcome: View {
     var body: some View {
         GeometryReader { geo in
             let panel: CGFloat = 176
-            let ear = min(geo.size.width * 0.98, (geo.size.height - panel) * 0.60)
-            // the ear sits right of centre inside its picture (its middle is at 59% of the width): shift the picture so the ear itself is centred
-            let earMid = CGPoint(x: geo.size.width / 2 - ear * 0.088, y: geo.size.height - panel - ear * 0.46)
+            // the whole ear, centred in the open space between the words and the button panel
+            let top: CGFloat = 196, room = geo.size.height - panel - top
+            let earH = min(room * 0.86, geo.size.width * 0.74 * 1.288), earW = earH / 1.288
+            let earMid = CGPoint(x: geo.size.width / 2, y: top + room / 2)
             ZStack(alignment: .topLeading) {
                 Color.white.ignoresSafeArea()
-                // rings of sound arriving at the ear
+                // waves of sound coming in to the ear from all around
                 TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
                     Canvas { ctx, size in
                         let t = timeline.date.timeIntervalSinceReferenceDate
-                        let centre = CGPoint(x: earMid.x + ear * 0.088, y: earMid.y - ear * 0.02)
-                        for k in 0..<5 {
-                            let phase = (t * 0.16 + Double(k) / 5).truncatingRemainder(dividingBy: 1)
-                            let r = ear * (0.50 + 1.25 * (1 - phase))                    // rings travel inwards, towards the ear
-                            ctx.stroke(Path(ellipseIn: CGRect(x: centre.x - r, y: centre.y - r, width: 2 * r, height: 2 * r)),
-                                       with: .color(Look.peach.opacity(0.85 * sin(phase * .pi))), lineWidth: 10)
+                        for k in 0..<4 {
+                            let phase = (t * 0.22 + Double(k) / 4).truncatingRemainder(dividingBy: 1)
+                            let r = earH * (0.46 + 0.62 * (1 - phase))                   // each ring shrinks towards the ear
+                            ctx.stroke(Path(ellipseIn: CGRect(x: earMid.x - r, y: earMid.y - r, width: 2 * r, height: 2 * r)),
+                                       with: .color(Look.peach.opacity(0.9 * sin(phase * .pi))), lineWidth: 9)
                         }
                     }
                 }
                 .ignoresSafeArea().accessibilityHidden(true)
 
-                Image("MascotCut").resizable().scaledToFit().frame(width: ear, height: ear)
-                    .position(x: earMid.x, y: earMid.y + ear * 0.04 + (up ? -5 : 5))
+                Image("MascotCut").resizable().scaledToFit().frame(width: earW, height: earH)
+                    .position(x: earMid.x, y: earMid.y + (up ? -5 : 5))
                     .accessibilityLabel("Tether's mascot, a smiling ear")
 
                 VStack(alignment: .leading, spacing: 6) {
