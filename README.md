@@ -1,152 +1,153 @@
 <p align="center">
-  <img src="ios/HearProbe/Assets.xcassets/Mascot.imageset/mascot.png" width="140" alt="Tether mascot: a smiling ear">
+  <img src="ios/HearProbe/Assets.xcassets/Mascot.imageset/mascot.png" width="128" alt="Tether">
 </p>
 
 <h1 align="center">Tether</h1>
 
-<p align="center"><b>Pick one voice in a noisy room and hear only that person.</b></p>
-
 <p align="center">
-  <img src="https://img.shields.io/badge/iOS-17%2B-000000?style=for-the-badge&logo=apple&logoColor=white" alt="iOS 17+">
-  <img src="https://img.shields.io/badge/Swift-F05138?style=for-the-badge&logo=swift&logoColor=white" alt="Swift">
-  <img src="https://img.shields.io/badge/SwiftUI-0A84FF?style=for-the-badge&logo=swift&logoColor=white" alt="SwiftUI">
-  <img src="https://img.shields.io/badge/Core%20ML-Neural%20Engine-34C759?style=for-the-badge&logo=apple&logoColor=white" alt="Core ML on the Neural Engine">
-  <img src="https://img.shields.io/badge/ONNX%20Runtime-005CED?style=for-the-badge&logo=onnx&logoColor=white" alt="ONNX Runtime">
-  <img src="https://img.shields.io/badge/NVIDIA-Sortformer-76B900?style=for-the-badge&logo=nvidia&logoColor=white" alt="NVIDIA Sortformer">
-  <img src="https://img.shields.io/badge/100%25-on%20device-E9785B?style=for-the-badge" alt="100% on device">
+  <strong>Pick one voice in a noisy room and hear only that person.</strong><br>
+  Real-time voice isolation that runs entirely on an iPhone.
 </p>
 
----
+<p align="center">
+  <img src="https://img.shields.io/badge/iOS-17%2B-111111?style=flat-square&logo=apple&logoColor=white" alt="iOS 17+">
+  <img src="https://img.shields.io/badge/Swift-5-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift 5">
+  <img src="https://img.shields.io/badge/SwiftUI-0A84FF?style=flat-square&logo=swift&logoColor=white" alt="SwiftUI">
+  <img src="https://img.shields.io/badge/Core%20ML-Neural%20Engine-34C759?style=flat-square&logo=apple&logoColor=white" alt="Core ML">
+  <img src="https://img.shields.io/badge/ONNX%20Runtime-1.32-005CED?style=flat-square&logo=onnx&logoColor=white" alt="ONNX Runtime">
+  <img src="https://img.shields.io/badge/NVIDIA-Sortformer-76B900?style=flat-square&logo=nvidia&logoColor=white" alt="NVIDIA Sortformer">
+  <img src="https://img.shields.io/badge/runs-on%20device-E9785B?style=flat-square" alt="Runs on device">
+</p>
 
-## 🎧 The idea
+<p align="center">
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#tech-stack">Tech stack</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="docs/ARCHITECTURE.md">Architecture</a>
+</p>
 
-A loud room is exhausting when you only want to hear one person. For people with sensory overload it can be the difference between staying and leaving.
+<p align="center">
+  <img src="docs/architecture.svg" alt="How Tether works: the microphone feeds a speaker model that finds who is talking; tapping a voice builds a short clip of that person; a voice filter lifts them out of the mixture; clean-up and a smart mute follow; only that voice reaches the headphones." width="100%">
+</p>
 
-Tether is the fix: **phone on the table, headphones in.** The app finds the people talking around you and puts each of them on screen. Tap a voice, and that person is all you hear. Everyone else, the echo and the background noise fade away.
+## About
 
-No setup. No recording a voice sample first. No cloud. Every model runs on the iPhone in your hand.
+A loud room is tiring when you only want to hear one person. For someone who gets overloaded by sound, it can be the difference between staying and leaving.
 
-**Who it is for**
+Tether changes what reaches your ears. Put the phone on the table and your headphones in. The app finds the people talking around you and gives each one a spot on screen. Tap a voice, and that person is all you hear: everyone else, the room's echo and the background noise fade out.
+
+There is no setup, no voice sample to record first, and no cloud. Every model runs on the phone.
+
+**Made for**
 
 | | |
 |---|---|
-| 🧠 **Sensory overload** | Keep the room quiet and let one trusted voice through |
-| 🎓 **Classrooms** | A student follows the teacher over a restless room |
-| ☕ **Cafés and counters** | Hear the barista, not the grinder and the queue |
-| 🍽️ **Loud tables** | Follow the one friend you are talking to |
+| **Sensory overload** | Keep the room quiet and let one trusted voice through. |
+| **Classrooms** | Follow the teacher over a restless room. |
+| **Cafés and counters** | Hear the barista, not the grinder and the queue. |
+| **Loud tables** | Stay with the one friend you are talking to. |
 
-## ✨ What it does
+## How it works
 
-- 🗣️ **Finds every voice.** Each person gets a spot on screen a couple of seconds after they start talking.
-- 👆 **One tap to isolate.** Pick a voice and hear that person, even while others talk over them.
-- 🧹 **Cleans the sound.** Noise and room echo are removed, quiet voices are raised, and speech is brightened.
-- 🏷️ **Knows who is who.** A listening agent names the voices from what they say ("Barista", "Teacher") and taps you on the shoulder when someone says something you should not miss.
-- 🚦 **Shows you when it is ready.** Voices change colour as the app learns them: learning, ready to pick, on.
-- 👋 **Welcomes you in.** A first-run walkthrough explains the screen in a few taps.
-- 📊 **Measures itself.** Every session is logged, so each layer can be checked and tuned from real use.
+Four models share one phone, and sound is played 0.6 seconds after it is heard. That short head start is the trick: by the time a moment of sound reaches you, the phone has already worked out who was talking and pulled your person out of it.
 
-## 🏗️ How it works
+1. **Find the voices.** A streaming speaker model on the Neural Engine decides who is talking 12 times a second: a quick guess first, a confident answer half a second later.
+2. **Learn the one you tap.** The app gathers three seconds of that person talking alone, and voiceprints every piece so a wrong voice cannot get in.
+3. **Lift them out.** A target-speaker extraction model uses that clip to pull the matching voice out of the mixture, 40 milliseconds at a time, even while others talk over them.
+4. **Polish.** Noise and echo are removed, the voice is brightened, and loudness is evened out so a distant speaker is as easy to hear as a near one.
+5. **Mute the rest.** When someone else is clearly talking, the gate closes. It reopens just before your person starts, so first syllables are not clipped.
 
-Four models and a 0.6 second head start. Sound reaches your ears just after the microphone hears it, and in that gap the phone works out who is talking and pulls your person out of the mix.
+The layer-by-layer breakdown, with measurements, is in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
-```mermaid
-flowchart LR
-    MIC(["🎙️ Microphone"]):::io
+## Features
 
-    subgraph PHONE["📱 On the iPhone"]
-        direction LR
-        WHO["🧠 Who is talking<br/><b>NVIDIA Sortformer</b><br/>12 decisions a second"]:::model
-        UI["👆 Voices on screen<br/><b>SwiftUI</b>"]:::ui
-        CLIP["✂️ Clip builder<br/>3 s of your person<br/>checked by <b>CAM++</b> voiceprints"]:::model
-        TSE["🎯 Voice filter<br/><b>REAL-TSE</b><br/>pulls one voice out of the mix"]:::hero
-        CLEAN["🧹 Clean-up<br/><b>LocalVQE</b> noise + echo removal<br/>brighten · auto level"]:::model
-        GATE["🚪 Smart mute<br/>closes on everyone else"]:::gate
-    end
+| | |
+|---|---|
+| **Automatic voice discovery** | Each person appears on screen a couple of seconds after they start talking. |
+| **One-tap isolation** | Tap a voice to hear that person; tap again to let go. |
+| **Works through overlap** | The voice filter keeps your person audible while others talk over them. |
+| **Noise and echo removal** | A dedicated clean-up model runs on everything you hear. |
+| **Automatic loudness** | Quiet and distant voices are raised to a comfortable level. |
+| **Listening agent** | Optional. Follows the conversation, names each voice from what they say ("Barista", "Teacher") and raises a card when something is said that you should not miss. |
+| **Clear voice states** | Voices change colour as the app learns them: learning, ready to pick, on. |
+| **Guided first run** | A short walkthrough explains the screen. |
+| **Built-in measurement** | Every session writes a log and a recording to the phone, with tools to analyse them. |
 
-    EARS(["🎧 Your headphones"]):::io
-    AGENT["🤖 Listening agent<br/>names voices, flags what matters"]:::agent
-
-    MIC --> WHO --> UI
-    UI -- "tap a voice" --> CLIP --> TSE
-    MIC --> TSE --> CLEAN --> GATE --> EARS
-    WHO -- "who spoke when" --> GATE
-    MIC -. "optional" .-> AGENT -.-> UI
-
-    classDef io fill:#1f2937,stroke:#111827,color:#ffffff,stroke-width:2px
-    classDef model fill:#3fd8c8,stroke:#0f766e,color:#062925,stroke-width:2px
-    classDef hero fill:#e9785b,stroke:#9a3412,color:#ffffff,stroke-width:3px
-    classDef ui fill:#0a84ff,stroke:#1e3a8a,color:#ffffff,stroke-width:2px
-    classDef gate fill:#fde68a,stroke:#b45309,color:#422006,stroke-width:2px
-    classDef agent fill:#c4b5fd,stroke:#5b21b6,color:#2e1065,stroke-width:2px
-    style PHONE fill:#fff7f3,stroke:#e9785b,stroke-width:2px,color:#7c2d12
-```
-
-**Step by step**
-
-1. 🧠 **Find the voices.** A streaming speaker model on the Neural Engine decides who is talking 12 times a second, with a quick guess first and a confident answer half a second later.
-2. ✂️ **Learn the one you tap.** The app gathers three seconds of that person talking alone. Every piece is voiceprinted so the wrong voice cannot sneak in.
-3. 🎯 **Pull them out.** A target-speaker extraction model takes that clip and lifts the matching voice out of the mixture, 40 milliseconds at a time.
-4. 🧹 **Polish it.** Noise and echo removal, a brightness lift, and automatic loudness so a far-away voice is as easy to hear as a near one.
-5. 🚪 **Mute the rest.** When someone else is clearly talking, the gate closes. It opens just before your person starts, so first syllables are not clipped.
-
-Want the full picture, layer by layer? → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**
-
-## 📈 By the numbers
+## Performance
 
 Measured from the app's own session logs on an iPhone 13 Pro.
 
-| | |
+| Metric | Result |
 |---|---|
-| ⚡ **25 ms** | to filter and clean every 40 ms of sound: faster than real time |
-| 🔇 **94%** | of the time someone else talked alone, they were muted |
-| 🧠 **12×/s** | who-is-talking decisions |
-| 🧩 **4 models** | running together on one phone |
-| ☁️ **0** | audio sent to a server for the core experience |
+| Voice filter and clean-up | **25 ms** per 40 ms of sound (faster than real time) |
+| Who-is-talking updates | **12 per second** |
+| Other speakers muted while talking alone | **94%** of the time |
+| Models running together on the phone | **4** |
+| Audio sent to a server for isolation | **None** |
 
-## 🧰 Built with
+## Tech stack
 
-| | Technology | Used for |
-|---|---|---|
-| 🍎 | **Swift + SwiftUI** | The whole app and its interface |
-| 🔊 | **AVAudioEngine** | Low-latency microphone in, headphones out |
-| 🧠 | **Core ML on the Neural Engine** | Running the speaker, voiceprint and clean-up models |
-| 🟢 | **NVIDIA Sortformer** via [FluidAudio](https://github.com/FluidInference/FluidAudio) | Who is talking, live |
-| 🎯 | **REAL-TSE** on **ONNX Runtime** | Extracting one voice from the mix |
-| 🪪 | **CAM++** | Voiceprints |
-| 🧹 | **LocalVQE** | Noise and echo removal |
-| 🎨 | **SceneKit** | The live brain illustration on the main screen |
-| 🐍 | **Python** | Session reports and replay tools |
+| Layer | Technology |
+|---|---|
+| App and interface | ![Swift](https://img.shields.io/badge/Swift-F05138?style=flat-square&logo=swift&logoColor=white) ![SwiftUI](https://img.shields.io/badge/SwiftUI-0A84FF?style=flat-square&logo=swift&logoColor=white) ![SceneKit](https://img.shields.io/badge/SceneKit-111111?style=flat-square&logo=apple&logoColor=white) |
+| Real-time audio | ![AVAudioEngine](https://img.shields.io/badge/AVAudioEngine-111111?style=flat-square&logo=apple&logoColor=white) ![Accelerate](https://img.shields.io/badge/Accelerate-111111?style=flat-square&logo=apple&logoColor=white) |
+| Who is talking | ![NVIDIA Sortformer](https://img.shields.io/badge/NVIDIA%20Sortformer-76B900?style=flat-square&logo=nvidia&logoColor=white) ![Core ML](https://img.shields.io/badge/Core%20ML-34C759?style=flat-square&logo=apple&logoColor=white) via [FluidAudio](https://github.com/FluidInference/FluidAudio) |
+| Voice filter | ![REAL-TSE](https://img.shields.io/badge/REAL--TSE-E9785B?style=flat-square) ![ONNX Runtime](https://img.shields.io/badge/ONNX%20Runtime-005CED?style=flat-square&logo=onnx&logoColor=white) |
+| Voiceprints | ![CAM++](https://img.shields.io/badge/CAM%2B%2B-3FD8C8?style=flat-square) ![Core ML](https://img.shields.io/badge/Core%20ML-34C759?style=flat-square&logo=apple&logoColor=white) |
+| Noise and echo removal | ![LocalVQE](https://img.shields.io/badge/LocalVQE-3FD8C8?style=flat-square) ![Core ML](https://img.shields.io/badge/Core%20ML-34C759?style=flat-square&logo=apple&logoColor=white) |
+| Analysis tools | ![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white) |
+| Build | ![Xcode](https://img.shields.io/badge/Xcode-147EFB?style=flat-square&logo=xcode&logoColor=white) ![XcodeGen](https://img.shields.io/badge/XcodeGen-111111?style=flat-square) |
 
-## 🚀 Run it
+## Getting started
 
-You need a Mac with Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) and an iPhone on iOS 17 or later.
+**Requirements:** a Mac with Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`), and an iPhone on iOS 17 or later with headphones.
 
 ```sh
 git clone --recurse-submodules https://github.com/aleburrascano/tether
-cd tether && ./scripts/fetch_deps.sh
+cd tether
+./scripts/fetch_deps.sh
+```
 
-# the voice filter's two model files are not in git: copy them in
-#   enroll.onnx, chunk_int8.onnx  ->  ios/HearProbe/Models/
+Copy the voice filter's two model files, `enroll.onnx` and `chunk_int8.onnx`, into `ios/HearProbe/Models/`. They are not stored in git.
 
-cd ios && DEVELOPMENT_TEAM=<your Apple team id> xcodegen generate
+```sh
+cd ios
+DEVELOPMENT_TEAM=<your Apple team id> xcodegen generate
 open HearProbe.xcodeproj
 ```
 
-Pick your phone, press Run, put your headphones in. The first launch downloads the on-device models (about 290 MB), then you are listening.
+Select your phone, press Run, and put your headphones in. The first launch downloads the on-device models (about 290 MB).
 
-The listening agent is optional: it runs as a small service on a Mac on the same network, set in `Agent.swift`. Without it the app works the same and voices are numbered.
+The listening agent is optional. It runs as a small service on a Mac on the same network; set its address in `ios/HearProbe/Agent.swift`. Without it, the app works the same and voices are numbered.
 
-## 🔭 What's next
+## Project structure
 
-- 🏛️ **Bigger, echoier rooms**: training the voice filter on far-field speech.
-- 👥 **More than four voices**, and telling apart people who sound alike.
-- 📱 **The listening agent on the phone**, so nothing leaves the device at all.
-- 🫶 **Shadow mode**: stay in silence until a trusted person says your name, then let only their voice through.
+```
+ios/HearProbe/     the app
+  Audio.swift        microphone in, delay line, mute gate, headphones out
+  Voices.swift       who is talking, and the mute decisions
+  Extractor.swift    clip builder, voice filter, clean-up
+  Agent.swift        listening agent client
+  ContentView.swift  main screen, walkthrough, settings
+docs/              architecture notes and the diagram
+tools/             session reports, mute replay, voiceprint calibration
+scripts/           dependency setup
+```
 
-## 🔒 Privacy
+## Roadmap
+
+- **Larger, more reverberant rooms**, by training the voice filter on far-field speech.
+- **More than four voices**, and separating people who sound alike.
+- **An on-device listening agent**, so nothing leaves the phone at all.
+- **Shadow mode**: stay in silence until a trusted person says your name, then let only their voice through.
+
+## Privacy
 
 Tether listens to the room it is in. Recordings and logs stay on your phone and are never part of this repository.
 
----
+## Acknowledgements
 
-<p align="center">Built at a hackathon, November 2026.</p>
+Tether builds on [FluidAudio](https://github.com/FluidInference/FluidAudio), NVIDIA's Sortformer speaker model, the REAL-TSE target-speaker extraction baseline, [ONNX Runtime](https://onnxruntime.ai), and [Lucide](https://lucide.dev) icons in the diagram.
+
+<p align="center"><sub>Built at a hackathon, November 2026.</sub></p>

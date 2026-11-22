@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="How Tether works: microphone, who is talking, voices on screen, clip builder, voice filter, clean-up, smart mute, headphones">
+<defs><marker id="a6B6B76" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1L9 5L1 9" fill="none" stroke="#6B6B76" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="a3FD8C8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1L9 5L1 9" fill="none" stroke="#3FD8C8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="aE9785B" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1L9 5L1 9" fill="none" stroke="#E9785B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="aB6A2F5" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1L9 5L1 9" fill="none" stroke="#B6A2F5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect width="1280" height="640" rx="24" fill="#0C0C10"/>
+<rect x="0.5" y="0.5" width="1279" height="639" rx="24" fill="none" stroke="#2A2A34"/>
+<text x="40" y="52" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#6B6B76" text-anchor="start" letter-spacing="1.6">HOW TETHER WORKS</text>
+<text x="1240" y="52" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#6B6B76" text-anchor="end" letter-spacing="0">everything inside the frame runs on the iPhone</text>
+<rect x="232" y="84" width="832" height="372" rx="22" fill="#FFFFFF" fill-opacity="0.018" stroke="#2A2A34" stroke-dasharray="3 6"/>
+<rect x="248" y="104" width="176" height="120" rx="16" fill="#15151B" stroke="#2A2A34" stroke-width="1"/>
+<circle cx="280" cy="140" r="17" fill="#5AA9FF" fill-opacity="0.13"/>
+<g transform="translate(270.5,130.5) scale(0.792)" fill="none" stroke="#5AA9FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></g>
+<text x="306" y="137" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#F4F4F5" text-anchor="start" letter-spacing="0">Voices on screen</text>
+<text x="306" y="154" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#5AA9FF" text-anchor="start" letter-spacing="0">SwiftUI</text>
+<text x="266" y="188" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">One spot per person.</text>
+<text x="266" y="206" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">Tap the one to hear.</text>
+<rect x="456" y="104" width="176" height="120" rx="16" fill="#15151B" stroke="#2A2A34" stroke-width="1"/>
+<circle cx="488" cy="140" r="17" fill="#3FD8C8" fill-opacity="0.13"/>
+<g transform="translate(478.5,130.5) scale(0.792)" fill="none" stroke="#3FD8C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><path d="M14.8 14.8 20 20"/></g>
+<text x="514" y="137" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#F4F4F5" text-anchor="start" letter-spacing="0">Clip builder</text>
+<text x="514" y="154" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#3FD8C8" text-anchor="start" letter-spacing="0">CAM++ voiceprints</text>
+<text x="474" y="188" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">3 s of that person alone,</text>
+<text x="474" y="206" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">each piece verified.</text>
+<rect x="40" y="262" width="176" height="132" rx="16" fill="#15151B" stroke="#2A2A34" stroke-width="1"/>
+<circle cx="72" cy="298" r="17" fill="#F4F4F5" fill-opacity="0.13"/>
+<g transform="translate(62.5,288.5) scale(0.792)" fill="none" stroke="#F4F4F5" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></g>
+<text x="98" y="303" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#F4F4F5" text-anchor="start" letter-spacing="0">Microphone</text>
+<text x="58" y="346" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">The phone on the table</text>
+<text x="58" y="364" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">hears the whole room.</text>
+<rect x="248" y="262" width="176" height="132" rx="16" fill="#15151B" stroke="#2A2A34" stroke-width="1"/>
+<circle cx="280" cy="298" r="17" fill="#3FD8C8" fill-opacity="0.13"/>
+<g transform="translate(270.5,288.5) scale(0.792)" fill="none" stroke="#3FD8C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></g>
+<text x="306" y="295" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#F4F4F5" text-anchor="start" letter-spacing="0">Who is talking</text>
+<text x="306" y="312" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#3FD8C8" text-anchor="start" letter-spacing="0">NVIDIA Sortformer</text>
+<text x="266" y="346" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">Tracks up to four voices,</text>
+<text x="266" y="364" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">12 decisions a second.</text>
+<rect x="456" y="262" width="176" height="132" rx="16" fill="#2A1712" stroke="#E9785B" stroke-width="2"/>
+<circle cx="488" cy="298" r="17" fill="#E9785B" fill-opacity="0.13"/>
+<g transform="translate(478.5,288.5) scale(0.792)" fill="none" stroke="#E9785B" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></g>
+<text x="514" y="295" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#F4F4F5" text-anchor="start" letter-spacing="0">Voice filter</text>
+<text x="514" y="312" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#E9785B" text-anchor="start" letter-spacing="0">REAL-TSE</text>
+<text x="474" y="346" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">Lifts your person out</text>
+<text x="474" y="364" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">of the mixture.</text>
+<rect x="664" y="262" width="176" height="132" rx="16" fill="#15151B" stroke="#2A2A34" stroke-width="1"/>
+<circle cx="696" cy="298" r="17" fill="#3FD8C8" fill-opacity="0.13"/>
+<g transform="translate(686.5,288.5) scale(0.792)" fill="none" stroke="#3FD8C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/></g>
+<text x="722" y="295" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#F4F4F5" text-anchor="start" letter-spacing="0">Clean-up</text>
+<text x="722" y="312" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#3FD8C8" text-anchor="start" letter-spacing="0">LocalVQE</text>
+<text x="682" y="346" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">Removes noise and echo,</text>
+<text x="682" y="364" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">evens out loudness.</text>
+<rect x="872" y="262" width="176" height="132" rx="16" fill="#15151B" stroke="#2A2A34" stroke-width="1"/>
+<circle cx="904" cy="298" r="17" fill="#F2C14E" fill-opacity="0.13"/>
+<g transform="translate(894.5,288.5) scale(0.792)" fill="none" stroke="#F2C14E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M22 9l-6 6"/><path d="M16 9l6 6"/></g>
+<text x="930" y="303" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#F4F4F5" text-anchor="start" letter-spacing="0">Smart mute</text>
+<text x="890" y="346" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">Closes while anyone</text>
+<text x="890" y="364" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">else is talking.</text>
+<rect x="1080" y="262" width="176" height="132" rx="16" fill="#15151B" stroke="#2A2A34" stroke-width="1"/>
+<circle cx="1112" cy="298" r="17" fill="#F4F4F5" fill-opacity="0.13"/>
+<g transform="translate(1102.5,288.5) scale(0.792)" fill="none" stroke="#F4F4F5" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></g>
+<text x="1138" y="303" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#F4F4F5" text-anchor="start" letter-spacing="0">Headphones</text>
+<text x="1098" y="346" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">Only the voice</text>
+<text x="1098" y="364" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">you picked.</text>
+<path d="M221,328.0 L242,328.0" fill="none" stroke="#6B6B76" stroke-width="1.8" stroke-linejoin="round"  marker-end="url(#a6B6B76)"/>
+<path d="M429,328.0 L450,328.0" fill="none" stroke="#E9785B" stroke-width="1.8" stroke-linejoin="round"  marker-end="url(#aE9785B)"/>
+<path d="M637,328.0 L658,328.0" fill="none" stroke="#E9785B" stroke-width="1.8" stroke-linejoin="round"  marker-end="url(#aE9785B)"/>
+<path d="M845,328.0 L866,328.0" fill="none" stroke="#6B6B76" stroke-width="1.8" stroke-linejoin="round"  marker-end="url(#a6B6B76)"/>
+<path d="M1053,328.0 L1074,328.0" fill="none" stroke="#6B6B76" stroke-width="1.8" stroke-linejoin="round"  marker-end="url(#a6B6B76)"/>
+<path d="M336.0,257 L336.0,230" fill="none" stroke="#3FD8C8" stroke-width="1.8" stroke-linejoin="round"  marker-end="url(#a3FD8C8)"/>
+<path d="M429,164 L450,164" fill="none" stroke="#3FD8C8" stroke-width="1.8" stroke-linejoin="round"  marker-end="url(#a3FD8C8)"/>
+<text x="440.0" y="155" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500" fill="#A1A1AA" text-anchor="middle" letter-spacing="0">tap</text>
+<path d="M544.0,229 L544.0,256" fill="none" stroke="#3FD8C8" stroke-width="1.8" stroke-linejoin="round"  marker-end="url(#a3FD8C8)"/>
+<path d="M336.0,399 L336.0,424 L960.0,424 L960.0,400" fill="none" stroke="#6B6B76" stroke-width="1.8" stroke-linejoin="round"  marker-end="url(#a6B6B76)"/>
+<text x="648.0" y="416" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500" fill="#A1A1AA" text-anchor="middle" letter-spacing="0">who spoke when</text>
+<rect x="40" y="498" width="580" height="104" rx="16" fill="#15151B" stroke="#2A2A34"/>
+<circle cx="80" cy="550" r="22" fill="#F2C14E" fill-opacity="0.13"/>
+<g transform="translate(68.5,538.5) scale(0.958)" fill="none" stroke="#F2C14E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></g>
+<text x="118" y="538" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#F4F4F5" text-anchor="start" letter-spacing="0">A 0.6 second head start</text>
+<text x="118" y="560" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">Sound is played just after it is heard. In that gap the models decide</text>
+<text x="118" y="578" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">who was talking and the filter finishes, so nothing reaches you unfiltered.</text>
+<rect x="660" y="498" width="580" height="104" rx="16" fill="#15151B" stroke="#B6A2F5" stroke-opacity="0.55" stroke-dasharray="5 5"/>
+<circle cx="700" cy="550" r="22" fill="#B6A2F5" fill-opacity="0.13"/>
+<g transform="translate(688.5,538.5) scale(0.958)" fill="none" stroke="#B6A2F5" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></g>
+<text x="738" y="538" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#F4F4F5" text-anchor="start" letter-spacing="0">Listening agent</text>
+<text x="856" y="538" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#B6A2F5" text-anchor="start" letter-spacing="0">optional</text>
+<text x="738" y="560" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">Follows the conversation, names each voice (Barista, Teacher)</text>
+<text x="738" y="578" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#A1A1AA" text-anchor="start" letter-spacing="0">and raises a card when someone says something you should not miss.</text>
+</svg>
