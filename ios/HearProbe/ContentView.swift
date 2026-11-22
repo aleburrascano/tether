@@ -1,281 +1,278 @@
 import SwiftUI
 
+/// Tether's one screen: who is talking, tap a voice to hear only that person.
+/// Monochrome with one accent; nothing scrolls. Tuning and diagnostics live in the settings sheet.
+enum Look {
+    static let bg = Color(red: 0.035, green: 0.035, blue: 0.043)
+    static let card = Color(red: 0.078, green: 0.078, blue: 0.090)
+    static let line = Color.white.opacity(0.07)
+    static let text = Color(red: 0.957, green: 0.957, blue: 0.961)
+    static let text2 = Color(red: 0.631, green: 0.631, blue: 0.667)
+    static let text3 = Color(red: 0.388, green: 0.388, blue: 0.420)
+    static let accent = Color(red: 0.247, green: 0.847, blue: 0.784)
+    static let ease = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.32)
+}
+
 struct ContentView: View {
     @StateObject private var m = Model()
-
-    var body: some View {
-        TabView {
-            HearScreen(m: m).tabItem { Label("Hear", systemImage: "person.wave.2") }
-            DebugScreen(m: m).tabItem { Label("Debug", systemImage: "waveform.path.ecg") }
-        }
-        .onAppear { m.loadModel() }
-    }
-}
-
-let slotColors: [Color] = [Color(red: 1.0, green: 0.55, blue: 0.25), Color(red: 0.25, green: 0.80, blue: 0.55),
-                           Color(red: 0.60, green: 0.45, blue: 1.0), Color(red: 1.0, green: 0.40, blue: 0.62)]
-
-// MARK: - Hear
-
-struct HearScreen: View {
-    @ObservedObject var m: Model
+    @State private var showSettings = false
+    @State private var history = [Float](repeating: 0, count: 44)
+    private let tick = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.05, green: 0.06, blue: 0.10), Color(red: 0.09, green: 0.10, blue: 0.16)],
-                           startPoint: .top, endPoint: .bottom).ignoresSafeArea()
-            VStack(spacing: 14) {
-                header
-                Ring(m: m).frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit).padding(.horizontal, 8)
-                Text(hint).font(.footnote).foregroundStyle(.white.opacity(0.55)).multilineTextAlignment(.center).frame(minHeight: 34)
-                Spacer(minLength: 0)
-                controls
+            Look.bg.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 0) {
+                topBar.frame(height: 44)
+                Spacer().frame(height: 14)
+                Text(title)
+                    .font(.system(size: 31, weight: .light)).tracking(-0.6)
+                    .foregroundStyle(Look.text).lineLimit(1).minimumScaleFactor(0.7)
+                    .id(title).transition(.opacity.combined(with: .offset(y: 8)))
+                Text(subtitle)
+                    .font(.system(size: 14)).foregroundStyle(Look.text2)
+                    .frame(height: 42, alignment: .topLeading).padding(.top, 4)
+                Levels(history: history, tone: tone).frame(maxHeight: .infinity).padding(.vertical, 6)
+                    .opacity(m.running ? 1 : 0.3)
+                voices.frame(height: 96)
+                Spacer().frame(height: 14)
+                startStop.frame(maxWidth: .infinity).frame(height: 52)
             }
-            .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 12)
+            .padding(.horizontal, 20).padding(.top, 6).padding(.bottom, 10)
+            .animation(Look.ease, value: title)
         }
         .preferredColorScheme(.dark)
+        .onAppear { m.loadModel() }
+        .onReceive(tick) { _ in
+            // -60 dB and below = 0, -15 dB = 1 (what the level bars show)
+            let v = m.running ? max(0, min(1, (m.level + 60) / 45)) : 0
+            history.removeFirst(); history.append(v)
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsSheet(m: m).presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+        }
     }
 
-    var header: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text("VoiceTap").font(.title2.bold())
-                Spacer()
-                Label(m.running ? (m.speakerWarning ? "No headphones" : (m.audio.outputName.isEmpty ? "Headphones" : m.audio.outputName)) : "Not listening",
-                      systemImage: m.speakerWarning && m.running ? "headphones.slash" : "headphones")
-                    .font(.caption.weight(.medium)).lineLimit(1)
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(.white.opacity(0.08), in: Capsule())
-                    .foregroundStyle(m.speakerWarning && m.running ? .orange : .white.opacity(0.8))
-            }
-            HStack {
-                Text(status).font(.headline).foregroundStyle(.white.opacity(0.9))
-                Spacer()
-                if m.running {
-                    Button { m.mark() } label: {
-                        Label(m.markText.isEmpty ? "Mark" : "Marked", systemImage: m.markText.isEmpty ? "flag" : "flag.fill")
-                            .font(.caption.weight(.semibold)).padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(Color.yellow.opacity(m.markText.isEmpty ? 0.15 : 0.35), in: Capsule())
-                    }.foregroundStyle(.yellow)
+    private var tone: Color { !m.running ? Look.text3 : (m.bubbles.contains { $0.talking } ? Look.accent : Look.text2) }
+
+    private var topBar: some View {
+        HStack(spacing: 8) {
+            Circle().fill(tone).frame(width: 8, height: 8)
+            Text(!m.modelReady ? "Loading" : (!m.running ? "Paused" : (m.speakerWarning ? "No headphones" : "Listening")))
+                .font(.system(size: 14, weight: .medium)).foregroundStyle(Look.text2)
+            Spacer()
+            if m.running {
+                // "that sounded wrong": saves the last 10 s for a look afterwards
+                Button { m.mark() } label: {
+                    Image(systemName: m.markText.isEmpty ? "flag" : "flag.fill").font(.system(size: 18))
+                        .foregroundStyle(m.markText.isEmpty ? Look.text3 : Look.accent).frame(width: 40, height: 44)
                 }
+                .accessibilityLabel("Mark this moment")
             }
+            Button { showSettings = true } label: {
+                Image(systemName: "gearshape").font(.system(size: 20)).foregroundStyle(Look.text2).frame(width: 40, height: 44, alignment: .trailing)
+            }
+            .accessibilityLabel("Settings")
         }
     }
 
-    var controls: some View {
-        VStack(spacing: 14) {
-            BoostSlider(m: m)
-            Button { m.toggle() } label: {
-                Text(m.running ? "Stop" : (m.modelReady ? "Start listening" : "Loading..."))
-                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 14)
+    private var title: String {
+        if !m.modelReady { return "Getting ready" }
+        if !m.running { return "Not listening" }
+        if let s = m.selected { return m.filterActive ? "Only voice \(s + 1)" : "Learning voice \(s + 1)" }
+        return m.bubbles.isEmpty ? "Listening" : "Hearing everyone"
+    }
+
+    private var subtitle: String {
+        if !m.error.isEmpty { return m.error }
+        if !m.modelReady { return m.modelStatus }
+        if !m.running { return "Put the phone on the table and press play." }
+        if m.speakerWarning { return "Sound is off without headphones, because the speaker would feed back. Connect them and it turns on." }
+        if m.selected != nil { return m.filterActive ? "Everyone else is turned down. Tap the number again to hear all voices." : "Keep them talking for a couple of seconds." }
+        return m.bubbles.isEmpty ? "A voice appears after someone talks for a moment." : "Tap a voice to hear only that person."
+    }
+
+    private var voices: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("VOICES").font(.system(size: 12, weight: .medium)).tracking(0.8).foregroundStyle(Look.text3)
+            HStack(spacing: 12) {
+                ForEach(m.bubbles) { b in
+                    VoiceDot(number: b.id + 1, talking: b.talking, chosen: m.selected == b.id,
+                             dimmed: m.selected != nil && m.selected != b.id, learning: m.selected == b.id && !m.filterActive)
+                        .onTapGesture {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            withAnimation(Look.ease) { m.tap(b) }
+                        }
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
+                if m.bubbles.isEmpty {
+                    Text(m.running ? "Nobody yet" : " ").font(.system(size: 14)).foregroundStyle(Look.text3).frame(height: 56)
+                }
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.borderedProminent).tint(m.running ? Color(white: 0.3) : .blue)
-            .disabled(!m.modelReady)
-            if !m.error.isEmpty { Text(m.error).font(.footnote).foregroundStyle(.red) }
-            if !m.modelReady { Text(m.modelStatus).font(.caption).foregroundStyle(.secondary) }
+            .animation(Look.ease, value: m.bubbles.map { $0.id })
         }
-        .padding(16)
-        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
     }
 
-    var status: String {
-        if !m.running { return "Put the phone on the table and start." }
-        if let s = m.selected { return m.filterActive ? "Hearing Person \(s + 1)" : "Hearing Person \(s + 1) - getting their voice..." }
-        if m.bubbles.isEmpty { return "Listening..." }
-        return "Hearing everyone"
-    }
-
-    var hint: String {
-        if !m.running { return "People appear around the phone as they talk." }
-        if m.running && m.speakerWarning { return "Sound is off without headphones (the speaker would feed back). Connect AirPods and it turns on." }
-        if m.bubbles.isEmpty { return "A person appears after they talk for a moment." }
-        if m.selected != nil { return "Tap them again to hear everyone. Spots show who, not where they sit." }
-        return "Tap a person to hear only them. Spots show who, not where they sit."
+    private var startStop: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            withAnimation(Look.ease) { m.toggle() }
+        } label: {
+            ZStack {
+                Circle().fill(m.running ? Color.white.opacity(0.06) : Look.accent)
+                Circle().stroke(m.running ? Color.white.opacity(0.14) : Look.accent, lineWidth: 1)
+                Image(systemName: m.running ? "pause.fill" : "play.fill").font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(m.running ? Look.text : Look.bg).offset(x: m.running ? 0 : 1)
+            }
+            .frame(width: 50, height: 50)
+        }
+        .buttonStyle(Press())
+        .disabled(!m.modelReady).opacity(m.modelReady ? 1 : 0.4)
+        .accessibilityLabel(m.running ? "Pause listening" : "Start listening")
     }
 }
 
-/// The phone in the middle, each person on a fixed spot of the ring: 1 top, 2 right, 3 bottom, 4 left.
-struct Ring: View {
-    @ObservedObject var m: Model
+struct Press: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.scaleEffect(configuration.isPressed ? 0.92 : 1).animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// The room's level over the last few seconds, newest on the right.
+struct Levels: View {
+    let history: [Float]
+    let tone: Color
     var body: some View {
         GeometryReader { g in
-            let size = min(g.size.width, g.size.height)
-            let c = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
-            let r = size * 0.31
-            ZStack {
-                Circle().stroke(.white.opacity(0.07), lineWidth: 1).frame(width: 2 * r, height: 2 * r).position(c)
-                Circle().stroke(.white.opacity(0.04), lineWidth: 1).frame(width: 1.3 * r, height: 1.3 * r).position(c)
-                PhoneGlyph(listening: m.running).position(c)
-                ForEach(m.bubbles) { b in
-                    let a = Double(b.id) * .pi / 2 - .pi / 2          // slot 0 top, then clockwise
-                    PersonDot(b: b, selected: m.selected == b.id, dimmed: m.selected != nil && m.selected != b.id,
-                              learning: m.selected == b.id && !m.filterActive, size: size * 0.21)
-                        .position(x: c.x + r * cos(a), y: c.y + r * sin(a))
-                        .onTapGesture { withAnimation(.spring(duration: 0.35)) { m.tap(b) } }
-                        .transition(.scale.combined(with: .opacity))
+            let n = history.count
+            let step = g.size.width / CGFloat(max(1, n))
+            let tall = min(g.size.height, 190)
+            ZStack(alignment: .topLeading) {
+                ForEach(0..<n, id: \.self) { i in
+                    let h = max(3, tall * CGFloat(min(1, history[i])))
+                    Capsule()
+                        .fill(i > n - 4 ? tone : Look.text2)
+                        .frame(width: max(2, step - 4), height: h)
+                        .opacity(0.1 + 0.8 * Double(i) / Double(max(1, n - 1)))
+                        .position(x: CGFloat(i) * step + step / 2, y: g.size.height / 2)
                 }
             }
-            .animation(.spring(duration: 0.4), value: m.bubbles.map { $0.id })
+            .animation(.linear(duration: 0.1), value: history)
         }
     }
 }
 
-struct PhoneGlyph: View {
-    let listening: Bool
-    var body: some View {
-        ZStack {
-            if listening {
-                Circle().fill(Color.blue.opacity(0.10)).frame(width: 96, height: 96)
-            }
-            RoundedRectangle(cornerRadius: 9).stroke(.white.opacity(0.7), lineWidth: 2).frame(width: 30, height: 54)
-            Capsule().fill(.white.opacity(0.7)).frame(width: 10, height: 3).offset(y: -21)
-        }
-    }
-}
-
-struct PersonDot: View {
-    let b: Model.Bubble
-    let selected: Bool
+/// One recognised voice: lights up while that person talks, fills in when it is the one you hear.
+struct VoiceDot: View {
+    let number: Int
+    let talking: Bool
+    let chosen: Bool
     let dimmed: Bool
     let learning: Bool
-    let size: CGFloat
-    @State private var pulse = false
+    @State private var breathe = false
 
     var body: some View {
-        let col = slotColors[b.id]
-        let d = selected ? size * 1.18 : size
+        let d: CGFloat = talking || chosen ? 56 : 48
         ZStack {
-            if b.talking {
-                Circle().fill(col.opacity(0.28)).frame(width: d * 1.45, height: d * 1.45)
-                    .scaleEffect(pulse ? 1.08 : 0.92)
-                    .onAppear { withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { pulse = true } }
-                    .onDisappear { pulse = false }
-            }
-            Circle().fill(LinearGradient(colors: [col, col.opacity(0.7)], startPoint: .top, endPoint: .bottom))
-                .frame(width: d, height: d)
-                .shadow(color: selected ? col.opacity(0.8) : .clear, radius: 16)
-            if selected { Circle().stroke(.white, lineWidth: 3).frame(width: d + 10, height: d + 10) }
-            Text("\(b.id + 1)").font(.system(size: d * 0.38, weight: .bold, design: .rounded)).foregroundStyle(.white)
+            Circle().fill(chosen ? Look.accent : (talking ? Look.accent.opacity(0.16) : Color.white.opacity(0.04)))
+            Circle().stroke(chosen ? Look.accent : (talking ? Look.accent.opacity(0.7) : Look.line), lineWidth: 1)
+            Text("\(number)").font(.system(size: 18, weight: .medium, design: .monospaced))
+                .foregroundStyle(chosen ? Look.bg : (talking ? Look.accent : Look.text2))
         }
-        .frame(width: size * 1.6, height: size * 1.6)
-        .overlay(alignment: .bottom) {
-            Text(selected ? (learning ? "getting voice..." : "HEARING") : (b.talking ? "talking" : " "))
-                .font(.caption2.weight(selected ? .bold : .regular)).foregroundStyle(.white.opacity(selected ? 0.95 : 0.6))
-                .offset(y: 6)
+        .frame(width: d, height: d)
+        .frame(width: 56, height: 56)
+        .opacity(dimmed ? 0.4 : (learning ? (breathe ? 0.55 : 1) : 1))
+        .animation(Look.ease, value: talking)
+        .animation(Look.ease, value: chosen)
+        .onChange(of: learning) { _, on in
+            if on { withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { breathe = true } } else { breathe = false }
         }
-        .opacity(dimmed ? 0.35 : 1)
         .contentShape(Circle())
+        .accessibilityLabel("Voice \(number)" + (talking ? ", talking" : "") + (chosen ? ", selected" : ""))
     }
 }
 
-struct BoostSlider: View {
-    @ObservedObject var m: Model
-    @State private var draft: Double? = nil
-    var body: some View {
-        HStack {
-            Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary)
-            Slider(value: Binding(get: { draft ?? m.boost }, set: { draft = $0.rounded(); m.audio.boostDB = Float($0.rounded()) }), in: 0...30,
-                   onEditingChanged: { editing in if !editing, let d = draft { m.setBoost(d); draft = nil } })
-            Text(String(format: "+%.0f dB", draft ?? m.boost)).font(.callout.monospacedDigit()).frame(width: 60)
-        }
-    }
-}
+// MARK: - Settings (tuning + diagnostics)
 
-// MARK: - Debug
-
-struct DebugScreen: View {
+struct SettingsSheet: View {
     @ObservedObject var m: Model
+    @Environment(\.dismiss) private var dismiss
+    @State private var boostDraft: Double? = nil
     @State private var delayDraft: Double? = nil
     @State private var sideways = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Debug").font(.largeTitle.bold())
-
-                box("Delay") {
+        NavigationStack {
+            Form {
+                Section("Sound") {
                     HStack {
+                        Text("Boost")
+                        Slider(value: Binding(get: { boostDraft ?? m.boost }, set: { boostDraft = $0.rounded(); m.audio.boostDB = Float($0.rounded()) }), in: 0...30,
+                               onEditingChanged: { editing in if !editing, let d = boostDraft { m.setBoost(d); boostDraft = nil } })
+                        Text(String(format: "+%.0f dB", boostDraft ?? m.boost)).font(.callout.monospacedDigit()).frame(width: 62, alignment: .trailing)
+                    }
+                    HStack {
+                        Text("Delay")
                         Slider(value: Binding(get: { delayDraft ?? m.delay }, set: { delayDraft = ($0 * 10).rounded() / 10 }), in: 0...1.5,
                                onEditingChanged: { editing in if !editing, let d = delayDraft { m.setDelay(d); delayDraft = nil } })
-                        Text(String(format: "%.1f s", delayDraft ?? m.delay)).font(.body.monospacedDigit()).frame(width: 52)
+                        Text(String(format: "%.1f s", delayDraft ?? m.delay)).font(.callout.monospacedDigit()).frame(width: 62, alignment: .trailing)
                     }
-                    Text("Plus ~0.2 s for Bluetooth.").font(.caption).foregroundStyle(.secondary)
+                    Toggle("Remove background noise and echo", isOn: Binding(get: { m.denoise }, set: { m.setDenoise($0) }))
+                    Toggle("Even out loudness per person", isOn: Binding(get: { m.autoLevel }, set: { m.setAutoLevel($0) }))
                 }
-
-                box("Improvements (compare on/off)") {
-                    Toggle("Smoothed mute (NVIDIA settings)", isOn: Binding(get: { m.smoothing }, set: { m.setSmoothing($0) }))
+                Section {
+                    Toggle("Tell similar voices apart", isOn: Binding(get: { m.personCheck }, set: { m.setPersonCheck($0) }))
+                    Toggle("Smoothed mute", isOn: Binding(get: { m.smoothing }, set: { m.setSmoothing($0) }))
                     Toggle("Voiceprint-checked clip", isOn: Binding(get: { m.clipCheck }, set: { m.setClipCheck($0) }))
                     Toggle("Subtract the interrupter", isOn: Binding(get: { m.subtract }, set: { m.setSubtract($0) }))
-                    Toggle("Remove background noise + echo", isOn: Binding(get: { m.denoise }, set: { m.setDenoise($0) }))
-                    Toggle("Auto loudness per person", isOn: Binding(get: { m.autoLevel }, set: { m.setAutoLevel($0) }))
-                    Toggle("Record whole session (for offline tests)", isOn: Binding(get: { m.recordSession }, set: { m.setRecordSession($0) }))
                     Toggle("Speaker model v2 (crowded overlap)", isOn: Binding(get: { m.modelV2 }, set: { m.setModelV2($0) }))
-                    Text("The model switch applies after you close and reopen the app (first time: downloads ~245 MB).")
-                        .font(.caption).foregroundStyle(.secondary)
-                    mono(String(format: "quality (played audio vs person): %@   clip score %.2f",
-                                m.quality < 0 ? "-" : String(format: "%.2f", m.quality), m.clipScore))
-                    mono(String(format: "subtracting: %@   filter load %.0f%% of real time",
-                                m.subtracting.map { "Person \($0 + 1)" } ?? "nobody", m.filterLoad * 100))
-                    mono("voiceprint model: \(Voiceprint.shared.status)   noise remover: \(Denoiser.shared.status)")
-                    mono(String(format: "auto loudness now %+.1f dB   noise remover %.1f ms per piece", m.autoGainDB, Denoiser.shared.lastMs))
-                    Text("Noise remover and the filter switches apply from the next person you tap.").font(.caption).foregroundStyle(.secondary)
+                } header: { Text("Voice handling") } footer: {
+                    Text("Filter switches apply from the next voice you tap. The model switch needs the app reopened.")
                 }
-
-                box("Who the model thinks is talking (last 8 s)") {
-                    ProbChart(recent: m.recent).frame(height: 110)
-                    HStack {
-                        ForEach(0..<4, id: \.self) { i in
-                            Text(String(format: "P%d %.2f", i + 1, m.latest.count > i ? m.latest[i] : 0))
-                                .font(.caption.monospacedDigit()).foregroundStyle(slotColors[i])
-                        }
-                    }
-                }
-
-                box("Numbers") {
-                    mono(m.filterActive ? String(format: "voice filter: ON, clip %.1f s of solo speech, refreshed %d times", m.soloSec, m.filterRefreshes)
-                                        : (m.selected == nil ? "voice filter: waiting for a tap" : String(format: "voice filter: learning, %.1f of 2 s", m.soloSec)))
-                    mono(String(format: "filter %.0f ms per 40 ms, filtered audio ready %.0f%% of the time", m.filterMs, m.filterCoverage * 100))
-                    mono(String(format: "speaker model %.0f ms per update, %.2f s behind the mic", m.procMs, m.modelLag))
-                    mono(String(format: "mute %.2f   buffered %.2f s   mic %.0f dB", m.gainNow, m.buffered, m.level))
+                Section("Right now") {
+                    mono(m.filterActive ? String(format: "filter on, clip %.1f s, refreshed %d times", m.soloSec, m.filterRefreshes)
+                                        : (m.selected == nil ? "filter waiting for a tap" : String(format: "filter learning, %.1f of 2 s", m.soloSec)))
+                    mono(String(format: "filter %.0f ms per 40 ms, ready %.0f%%, load %.0f%%", m.filterMs, m.filterCoverage * 100, m.filterLoad * 100))
+                    mono(String(format: "speaker model %.0f ms, %.2f s behind", m.procMs, m.modelLag))
+                    mono(String(format: "quality %@  clip score %.2f", m.quality < 0 ? "-" : String(format: "%.2f", m.quality), m.clipScore))
+                    mono(m.personText.isEmpty ? "voice check: -" : "voice check: \(m.personText)")
+                    mono(String(format: "mute %.2f  buffered %.2f s  mic %.0f dB", m.gainNow, m.buffered, m.level))
+                    mono("voiceprints \(Voiceprint.shared.status), noise remover \(Denoiser.shared.status)")
                     if let e = m.extractor.loadError { mono("filter load error: \(e)") }
                     mono(m.route.isEmpty ? "not started" : m.route)
+                    ProbChart(recent: m.recent).frame(height: 90)
                 }
-
-                box("Direction checks") {
-                    Button("Check 360 support") { m.runSpatialCheck() }
-                    if !m.spatialText.isEmpty { mono(m.spatialText) }
-                    Divider()
-                    Button(m.dirBusy ? "Recording..." : "Rotation test (35 s)") { m.rotationTest(sideways: sideways) }
-                        .buttonStyle(.borderedProminent).disabled(m.dirBusy)
-                    Text("Phone flat ~1 m from the Mac while the Mac plays a voice. Tap, then spin the phone slowly one full turn.").font(.caption).foregroundStyle(.secondary)
-                    Divider()
-                    Toggle("Phone sideways (top pointing to your left)", isOn: $sideways)
-                    Text("Friend talks from the side you tap, 10 s each. (Listening stops by itself during a test.)").font(.caption).foregroundStyle(.secondary)
-                    HStack {
-                        ForEach(["left", "front", "right"], id: \.self) { side in
-                            Button(side.capitalized) { m.recordDirection(side, sideways: sideways) }
-                                .buttonStyle(.bordered).disabled(m.dirBusy)
-                        }
-                    }
-                    if !m.dirStatus.isEmpty { mono(m.dirStatus) }
-                }
-
-                box("Recording + log") {
+                Section("Recording and log") {
+                    Toggle("Record whole session", isOn: Binding(get: { m.recordSession }, set: { m.setRecordSession($0) }))
                     Button("Record 20 s") { m.record() }.disabled(!m.running)
                     if !m.recordText.isEmpty { mono(m.recordText) }
                     mono("log: \(m.logName.isEmpty ? "-" : m.logName)")
                 }
-            }.padding()
+                Section("Direction checks") {
+                    Button("Check 360 support") { m.runSpatialCheck() }
+                    if !m.spatialText.isEmpty { mono(m.spatialText) }
+                    Toggle("Phone sideways", isOn: $sideways)
+                    Button(m.dirBusy ? "Recording..." : "Rotation test (35 s)") { m.rotationTest(sideways: sideways) }.disabled(m.dirBusy)
+                    HStack {
+                        ForEach(["left", "front", "right"], id: \.self) { side in
+                            Button(side.capitalized) { m.recordDirection(side, sideways: sideways) }.buttonStyle(.bordered).disabled(m.dirBusy)
+                        }
+                    }
+                    if !m.dirStatus.isEmpty { mono(m.dirStatus) }
+                }
+            }
+            .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.tint(Look.accent) } }
+            .tint(Look.accent)
         }
+        .preferredColorScheme(.dark)
     }
 
-    func box<V: View>(_ t: String, @ViewBuilder _ c: () -> V) -> some View {
-        VStack(alignment: .leading, spacing: 8) { Text(t).font(.headline); c() }
-            .padding().frame(maxWidth: .infinity, alignment: .leading)
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
-    }
-    func mono(_ s: String) -> some View { Text(s).font(.system(.footnote, design: .monospaced)) }
+    func mono(_ s: String) -> some View { Text(s).font(.system(.footnote, design: .monospaced)).foregroundStyle(.secondary) }
 }
+
+let slotColors: [Color] = [Look.accent, Color(white: 0.85), Color(white: 0.6), Color(white: 0.4)]
 
 struct ProbChart: View {
     let recent: [[Float]]
@@ -291,7 +288,7 @@ struct ProbChart: View {
                     let pt = CGPoint(x: CGFloat(i) * dx, y: size.height * (1 - CGFloat(fr.count > s ? fr[s] : 0)))
                     i == 0 ? p.move(to: pt) : p.addLine(to: pt)
                 }
-                ctx.stroke(p, with: .color(slotColors[s]), lineWidth: 2)
+                ctx.stroke(p, with: .color(slotColors[s]), lineWidth: 1.5)
             }
         }
     }

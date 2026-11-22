@@ -13,6 +13,9 @@ enum Tuning {
     static var clipCheck: Bool { get { b("clipCheck", true) } set { d.set(newValue, forKey: "clipCheck") } }
     /// Filter: pull out the loudest interrupter first and subtract them (2 filter passes)
     static var subtract: Bool { get { b("subtract", true) } set { d.set(newValue, forKey: "subtract") } }
+    /// Voiceprint layer over the speaker model's slots: tells similar voices on one slot apart, and
+    /// recognises a person who comes back on another slot (People.swift)
+    static var personCheck: Bool { get { b("personCheck", true) } set { d.set(newValue, forKey: "personCheck") } }
     /// Speaker model: v2.1 (default) or v2 (documented as better when many people talk at once). Needs a restart.
     static var modelV2: Bool { get { b("modelV2", false) } set { d.set(newValue, forKey: "modelV2") } }
 

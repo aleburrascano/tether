@@ -34,6 +34,8 @@ final class Voices {
     let hangover = 4                                   // frames (0.32 s)
 
     private var selectedSlot: Int? = nil
+    /// The selected slot is talking, but the voiceprint says it is someone else right now: treat as not our person.
+    var blocked = false
     private var extraction = false          // voice filter running: when nobody is detected, let the filtered audio through
 
     func setExtraction(_ on: Bool) {
@@ -175,7 +177,7 @@ final class Voices {
         for f in from...latestFrame {
             guard let p = preds[f] else { continue }
             let wasT = tgt
-            if p[s] > tOn { tgt = true } else if p[s] < tOff { tgt = false }
+            if p[s] > tOn && !blocked { tgt = true } else if p[s] < tOff || blocked { tgt = false }
             for k in 0..<4 where k != s { if p[k] > oOn { oth[k] = true } else if p[k] < oOff { oth[k] = false } }
             let other = (0..<4).contains { $0 != s && oth[$0] }
             if tgt { lastT = f }
@@ -198,7 +200,7 @@ final class Voices {
         var v: Float = 1
         for f in max(0, start)...latestFrame {
             guard let p = preds[f] else { continue }
-            let target = p[s] > threshold
+            let target = p[s] > threshold && !blocked
             let other = (0..<4).contains { $0 != s && p[$0] > threshold }
             if target { v = 1 }
             else if other { v = 0 }

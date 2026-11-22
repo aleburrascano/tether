@@ -78,6 +78,8 @@ final class Extractor {
     // control (set from UI, handled on the worker thread)
     var enabled = true
     var wantedSlot: Int? = nil
+    /// Narrows a slot's solo frames to the selected person's (set while the voiceprint layer is on).
+    var framesFilter: (([(Int, Float)]) -> [(Int, Float)])? = nil
     private var slot: Int? = nil
 
     // status
@@ -296,7 +298,8 @@ final class Extractor {
     private func buildClip(slot s: Int, first: Bool) {
         let fLen = 1280
         let prevSolo = soloSec
-        let frames = voices.soloFrames(slot: s)
+        var frames = voices.soloFrames(slot: s)
+        if let narrow = framesFilter { frames = narrow(frames) }
         let oldest = histW - histSize + fLen
         let usable = frames.filter { $0.0 * fLen >= max(0, oldest) && ($0.0 + 1) * fLen <= histW }
         if usable.isEmpty { soloSec = 0; return }

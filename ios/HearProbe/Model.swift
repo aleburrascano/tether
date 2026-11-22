@@ -3,7 +3,9 @@ import SwiftUI
 
 @MainActor
 final class Model: ObservableObject {
-    struct Bubble: Identifiable { let id: Int; var seconds: Double; var talking: Bool }   // id = model slot 0...3
+    /// One voice on screen. Without the voiceprint layer id == slot (speaker-model slot 0...3); with it, id is the
+    /// person and slot is where they were last heard.
+    struct Bubble: Identifiable { let id: Int; var slot: Int; var seconds: Double; var talking: Bool }
 
     @Published var running = false
     @Published var modelStatus = "not loaded"
@@ -62,6 +64,13 @@ final class Model: ObservableObject {
     let audio = Audio()
     lazy var voices = Voices(audio: audio)
     lazy var extractor = Extractor(audio: audio, voices: voices)
+    let people = People()
+    @Published var personCheck = Tuning.personCheck
+    @Published var personText = ""
+    private var selectedSlot: Int? = nil
+    func setPersonCheck(_ on: Bool) { personCheck = on; Tuning.personCheck = on; event("setting", ["person_check": on]) }
+    /// The voiceprint layer decides who is on screen (needs its model loaded).
+    private var byPerson: Bool { personCheck && Voiceprint.shared.ready }
     let filterOn = true                      // the voice filter is always on
     @Published var clipScore: Double = 0
     @Published var quality: Double = -1
@@ -108,8 +117,8 @@ final class Model: ObservableObject {
     func loadModel() {
         if ProcessInfo.processInfo.arguments.contains("-uiDemo") {     // screenshot mode only: fake people, no audio
             running = true; modelReady = true; selected = 1; filterActive = true
-            bubbles = [Bubble(id: 0, seconds: 20, talking: false), Bubble(id: 1, seconds: 30, talking: true),
-                       Bubble(id: 2, seconds: 12, talking: false), Bubble(id: 3, seconds: 8, talking: true)]
+            bubbles = [Bubble(id: 0, slot: 0, seconds: 20, talking: false), Bubble(id: 1, slot: 1, seconds: 30, talking: true),
+                       Bubble(id: 2, slot: 2, seconds: 12, talking: false), Bubble(id: 3, slot: 3, seconds: 8, talking: true)]
             return
         }
         guard !modelReady else { return }
@@ -134,16 +143,19 @@ final class Model: ObservableObject {
             route = audio.routeText
             speakerWarning = audio.outputIsSpeaker
             audio.listen = listening && !speakerWarning
-            selected = nil; bubbles = []; nextMetricFrame = 0
+            selected = nil; selectedSlot = nil; bubbles = []; nextMetricFrame = 0
+            voices.blocked = false
             voices.select(nil)
             voices.threshold = Float(threshold)
             voices.start()
             extractor.enabled = filterOn
             extractor.wantedSlot = nil
+            extractor.framesFilter = nil
             extractor.start()
+            people.start(voices: voices, extractor: extractor)
             openLog()
             event("start", ["route": route, "delay": delay, "model": Tuning.modelName, "smoothing": Tuning.smoothing,
-                            "clip_check": Tuning.clipCheck, "subtract": Tuning.subtract, "voiceprint": Voiceprint.shared.status,
+                            "person_check": Tuning.personCheck, "clip_check": Tuning.clipCheck, "subtract": Tuning.subtract, "voiceprint": Voiceprint.shared.status,
                             "denoise": Tuning.denoise, "denoiser": Denoiser.shared.status, "auto_level": Tuning.autoLevel,
                             "session_file": extractor.sessionName])
             audio.onRecordingDone = { [weak self] url in
@@ -161,16 +173,22 @@ final class Model: ObservableObject {
 
     func stop() {
         timer?.invalidate(); timer = nil
-        extractor.stop(); voices.stop(); audio.stop()
+        people.stop(); extractor.stop(); voices.stop(); audio.stop()
         event("stop", [:]); try? log?.close(); log = nil
         running = false
     }
 
     func tap(_ b: Bubble) {
         selected = (selected == b.id) ? nil : b.id
-        voices.select(selected)
-        extractor.wantedSlot = selected
-        event("select", ["slot": selected ?? -1])
+        selectedSlot = selected == nil ? nil : b.slot
+        voices.blocked = false
+        if let p = selected, byPerson {
+            let people = self.people
+            extractor.framesFilter = { people.framesOf(person: p, among: $0) }
+        } else { extractor.framesFilter = nil }
+        voices.select(selectedSlot)
+        extractor.wantedSlot = selectedSlot
+        event("select", ["slot": selectedSlot ?? -1, "person": byPerson ? (selected ?? -1) : -1])
     }
 
     func setListening(_ on: Bool) { listening = on; audio.listen = on && !speakerWarning; event("listen", ["on": on]) }
@@ -189,8 +207,26 @@ final class Model: ObservableObject {
     private func update() {
         let s = voices.snapshot()
         var b: [Bubble] = []
-        for (i, sl) in s.slots.enumerated() where sl.speechSec >= Model.minBubbleSec || i == selected {
-            b.append(Bubble(id: i, seconds: sl.speechSec, talking: sl.talking))
+        if byPerson {
+            // one voice per person the voiceprint layer knows; lit while their slot talks and is theirs
+            for p in people.list() {
+                b.append(Bubble(id: p.id, slot: p.slot, seconds: s.slots[p.slot].speechSec, talking: p.mine && s.slots[p.slot].talking))
+            }
+            if let sel = selected, let me = b.first(where: { $0.id == sel }) {
+                if me.slot != selectedSlot {                    // our person moved to another slot: follow them
+                    selectedSlot = me.slot; voices.select(me.slot); extractor.wantedSlot = me.slot
+                    event("select_follow", ["slot": me.slot, "person": sel])
+                }
+                // someone else is on our person's slot right now: do not let them through
+                let now = people.current(slot: me.slot)
+                voices.blocked = now != nil && now != sel
+            }
+            personText = people.text
+            for e in people.drainEvents() { write(e.merging(["t": (Date().timeIntervalSince(t0) * 1000).rounded() / 1000]) { a, _ in a }) }
+        } else {
+            for (i, sl) in s.slots.enumerated() where sl.speechSec >= Model.minBubbleSec || i == selected {
+                b.append(Bubble(id: i, slot: i, seconds: sl.speechSec, talking: sl.talking))
+            }
         }
         bubbles = b
         latest = s.latest; latestFinal = s.latestIsFinal; recent = s.recent
@@ -224,7 +260,7 @@ final class Model: ObservableObject {
         for f in max(nextMetricFrame, upTo - 200)...upTo {
             guard let p = voices.finalPred(f), let lv = extractor.levels(frame: f) else { continue }
             var d: [String: Any] = ["type": "f80", "f": f, "p": p.map { ($0 * 100).rounded() / 100 },
-                                    "in": r(lv.inDB), "sel": selected ?? -1, "boost": boost]
+                                    "in": r(lv.inDB), "sel": selectedSlot ?? -1, "boost": boost]
             if let o = lv.outDB { d["out"] = r(o) }
             if let g = audio.gateValue(frame: f) { d["gate"] = Double(g) }
             write(d)
@@ -247,7 +283,7 @@ final class Model: ObservableObject {
         write(["type": "frame", "t": r(Date().timeIntervalSince(t0)),
                "p": latest.map { r(Double($0)) }, "p_final": latestFinal,
                "speech_sec": slots.map { r($0.speechSec) }, "talking": slots.map { $0.talking },
-               "bubbles": bubbles.map { $0.id }, "selected": selected ?? -1,
+               "bubbles": bubbles.map { $0.id }, "selected": selectedSlot ?? -1, "person": byPerson ? (selected ?? -1) : -1, "slot_people": people.slotsNow,
                "gain": r(Double(gainNow)), "listen": listening, "delay": delay, "boost": boost, "out_peak": r(Double(audio.outPeak)), "threshold": threshold,
                "buffered": r(buffered), "underruns": underruns, "level_db": r(Double(level)),
                "filter_on": filterOn, "filter_active": filterActive, "solo_sec": r(soloSec), "filter_ms": r(filterMs),

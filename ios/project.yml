@@ -30,11 +30,11 @@ targets:
     info:
       path: HearProbe/Info.plist
       properties:
-        CFBundleDisplayName: HearProbe
+        CFBundleDisplayName: Tether
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        NSMicrophoneUsageDescription: "HearProbe listens to the room so you can pick who to hear."
-        NSMotionUsageDescription: "HearProbe uses the gyroscope to know which way the phone points during the direction test."
+        NSMicrophoneUsageDescription: "Tether listens to the room so you can pick who to hear."
+        NSMotionUsageDescription: "Tether uses the gyroscope to know which way the phone points during the direction test."
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
     settings:

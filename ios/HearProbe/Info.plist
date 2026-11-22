@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>HearProbe</string>
+	<string>Tether</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -23,9 +23,9 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>HearProbe listens to the room so you can pick who to hear.</string>
+	<string>Tether listens to the room so you can pick who to hear.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>HearProbe uses the gyroscope to know which way the phone points during the direction test.</string>
+	<string>Tether uses the gyroscope to know which way the phone points during the direction test.</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchScreen</key>
