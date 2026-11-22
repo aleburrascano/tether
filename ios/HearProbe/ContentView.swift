@@ -81,11 +81,11 @@ struct ContentView: View {
         }
     }
 
-    /// How much sound reaches the headphones, 0...1: the room when you hear everyone, only the picked
-    /// voice's moments when you picked one, nothing without headphones.
+    /// How much sound reaches the headphones, 0...1: the picked voice's moments; nothing when nobody is
+    /// picked or without headphones.
     private func heard(_ room: Float) -> Float {
         guard m.running, !m.speakerWarning else { return 0 }
-        guard let s = m.selected else { return room }
+        guard let s = m.selected else { return 0 }                  // nobody picked: silence
         return (m.bubbles.first { $0.id == s }?.talking ?? false) ? room : room * 0.08
     }
 

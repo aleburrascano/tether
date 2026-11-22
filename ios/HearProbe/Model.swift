@@ -145,7 +145,7 @@ final class Model: ObservableObject {
             try audio.start()
             route = audio.routeText
             speakerWarning = audio.outputIsSpeaker
-            audio.listen = listening && !speakerWarning
+            applyListen()
             selected = nil; selectedSlot = nil; bubbles = []; nextMetricFrame = 0
             voices.blocked = false
             voices.select(nil)
@@ -193,10 +193,14 @@ final class Model: ObservableObject {
         extractor.framesFilter = nil
         voices.select(selectedSlot)
         extractor.wantedSlot = selectedSlot
+        applyListen()
         event("select", ["slot": selectedSlot ?? -1, "person": byPerson ? (selected ?? -1) : -1])
     }
 
-    func setListening(_ on: Bool) { listening = on; audio.listen = on && !speakerWarning; event("listen", ["on": on]) }
+    /// Sound is played only while a voice is picked: with nobody picked the headphones stay silent
+    /// (and never without headphones, which would feed back).
+    private func applyListen() { audio.listen = listening && !speakerWarning && selected != nil }
+    func setListening(_ on: Bool) { listening = on; applyListen(); event("listen", ["on": on]) }
     func setBoost(_ d: Double) { boost = d; audio.boostDB = Float(d); event("boost", ["db": d]) }
     func setDelay(_ d: Double) { delay = d; audio.delaySec = d; event("delay", ["sec": d]) }
     func record() {
@@ -236,7 +240,7 @@ final class Model: ObservableObject {
         if routeTick % 10 == 0 { audio.refreshRoute() }       // ask every second: a missed system notice must not leave the sound off
         if speakerWarning != audio.outputIsSpeaker {          // headphones connected / removed mid-session
             speakerWarning = audio.outputIsSpeaker
-            audio.listen = listening && !speakerWarning
+            applyListen()
             event("route", ["headphones": !speakerWarning, "output": audio.outputName])
         }
         for e in extractor.drainEvents() { write(e.merging(["t": (Date().timeIntervalSince(t0) * 1000).rounded() / 1000]) { a, _ in a }) }
